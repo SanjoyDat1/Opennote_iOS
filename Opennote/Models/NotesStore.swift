@@ -1,0 +1,108 @@
+import Foundation
+
+/// In-memory + UserDefaults persistence for journals and papers (MVP).
+@Observable
+final class NotesStore {
+    var journals: [Journal]
+    var papers: [Paper]
+    /// Temporary storage for blocks when cloning a journal. Cleared after the new editor reads them.
+    var pendingBlocksForJournalId: [String: [NoteBlock]] = [:]
+
+    private let journalsKey = "opennote.journals"
+    private let papersKey = "opennote.papers"
+    
+    init() {
+        self.journals = Self.loadJournals()
+        self.papers = Self.loadPapers()
+    }
+    
+    func addJournal(_ journal: Journal) {
+        journals.append(journal)
+        save()
+    }
+    
+    func addPaper(_ paper: Paper) {
+        papers.append(paper)
+        save()
+    }
+    
+    func updateJournal(_ journal: Journal) {
+        guard let idx = journals.firstIndex(where: { $0.id == journal.id }) else { return }
+        journals[idx] = journal
+        save()
+    }
+    
+    func updatePaper(_ paper: Paper) {
+        guard let idx = papers.firstIndex(where: { $0.id == paper.id }) else { return }
+        papers[idx] = paper
+        save()
+    }
+    
+    func deleteJournal(id: String) {
+        journals.removeAll { $0.id == id }
+        save()
+    }
+    
+    func deletePaper(id: String) {
+        papers.removeAll { $0.id == id }
+        save()
+    }
+    
+    private func save() {
+        if let data = try? JSONEncoder().encode(journals.map { JournalDTO.from($0) }) {
+            UserDefaults.standard.set(data, forKey: journalsKey)
+        }
+        if let data = try? JSONEncoder().encode(papers.map { PaperDTO.from($0) }) {
+            UserDefaults.standard.set(data, forKey: papersKey)
+        }
+    }
+    
+    private static func loadJournals() -> [Journal] {
+        guard let data = UserDefaults.standard.data(forKey: "opennote.journals"),
+              let dtos = try? JSONDecoder().decode([JournalDTO].self, from: data),
+              !dtos.isEmpty else {
+            return [Journal(title: "My First Journal", lastEdited: Date())]
+        }
+        return dtos.map { $0.toJournal() }
+    }
+    
+    private static func loadPapers() -> [Paper] {
+        guard let data = UserDefaults.standard.data(forKey: "opennote.papers"),
+              let dtos = try? JSONDecoder().decode([PaperDTO].self, from: data),
+              !dtos.isEmpty else {
+            return [Paper(title: "Untitled Paper", lastEdited: Date())]
+        }
+        return dtos.map { $0.toPaper() }
+    }
+}
+
+private struct JournalDTO: Codable {
+    let id: String
+    let title: String
+    let lastEdited: Date
+    let isFavorite: Bool?
+    
+    static func from(_ j: Journal) -> JournalDTO {
+        JournalDTO(id: j.id, title: j.title, lastEdited: j.lastEdited, isFavorite: j.isFavorite)
+    }
+    
+    func toJournal() -> Journal {
+        Journal(id: id, title: title, lastEdited: lastEdited, isFavorite: isFavorite ?? false)
+    }
+}
+
+private struct PaperDTO: Codable {
+    let id: String
+    let title: String
+    let lastEdited: Date
+    let content: String?
+    let isFavorite: Bool?
+    
+    static func from(_ p: Paper) -> PaperDTO {
+        PaperDTO(id: p.id, title: p.title, lastEdited: p.lastEdited, content: p.content, isFavorite: p.isFavorite)
+    }
+    
+    func toPaper() -> Paper {
+        Paper(id: id, title: title, lastEdited: lastEdited, content: content ?? "", isFavorite: isFavorite ?? false)
+    }
+}

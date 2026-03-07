@@ -2,6 +2,7 @@ import Foundation
 
 private enum StorageKeys {
     static let hasSeenSplash = "opennote.hasSeenSplash"
+    static let hasSeenTutorial = "opennote.hasSeenTutorial"
     static let hasCompletedOnboarding = "opennote.hasCompletedOnboarding"
     static let isAuthenticated = "opennote.isAuthenticated"
 }
@@ -14,8 +15,11 @@ final class AppViewModel {
     /// Onboarding: has user completed "How did you hear about Opennote?"
     var hasCompletedOnboarding: Bool
 
-    /// Splash: has user seen splash (or skipped)
+    /// Splash: has user seen animated load screen
     var hasSeenSplash: Bool
+
+    /// Tutorial: has user seen or skipped the step-by-step tutorial
+    var hasSeenTutorial: Bool
 
     /// Onboarding: selected referral source (for MVP)
     var referralSource: String?
@@ -24,10 +28,12 @@ final class AppViewModel {
         currentUser: OpennoteUser? = nil,
         hasCompletedOnboarding: Bool = false,
         hasSeenSplash: Bool = false,
+        hasSeenTutorial: Bool = false,
         referralSource: String? = nil
     ) {
         let defaults = UserDefaults.standard
         self.hasSeenSplash = defaults.bool(forKey: StorageKeys.hasSeenSplash)
+        self.hasSeenTutorial = defaults.bool(forKey: StorageKeys.hasSeenTutorial)
         self.hasCompletedOnboarding = defaults.bool(forKey: StorageKeys.hasCompletedOnboarding)
         self.referralSource = referralSource
         if defaults.bool(forKey: StorageKeys.isAuthenticated) {
@@ -39,8 +45,13 @@ final class AppViewModel {
 
     var isAuthenticated: Bool { currentUser != nil }
 
-    func skipSplash() {
+    func completeSplash() {
         hasSeenSplash = true
+        persistState()
+    }
+
+    func completeTutorial() {
+        hasSeenTutorial = true
         persistState()
     }
 
@@ -63,6 +74,7 @@ final class AppViewModel {
     private func persistState() {
         let d = UserDefaults.standard
         d.set(hasSeenSplash, forKey: StorageKeys.hasSeenSplash)
+        d.set(hasSeenTutorial, forKey: StorageKeys.hasSeenTutorial)
         d.set(hasCompletedOnboarding, forKey: StorageKeys.hasCompletedOnboarding)
         d.set(currentUser != nil, forKey: StorageKeys.isAuthenticated)
     }

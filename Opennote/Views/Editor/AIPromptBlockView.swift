@@ -38,11 +38,31 @@ struct AIPromptBlockView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
 
             if let response, !response.isEmpty {
-                Text(response)
-                    .font(.system(size: 17, design: .default))
-                    .foregroundStyle(.secondary)
-                    .padding(.leading, 4)
+                ScrollView {
+                    markdownText(response)
+                        .font(.system(size: 17, design: .default))
+                        .foregroundStyle(.primary)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(16)
+                }
+                .frame(maxHeight: 600)
+                .background(Color(.systemGray6).opacity(0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.opennoteGreen.opacity(0.3), lineWidth: 1)
+                )
             }
+        }
+    }
+
+    @ViewBuilder
+    private func markdownText(_ raw: String) -> some View {
+        if let attributed = try? AttributedString(markdown: raw) {
+            Text(attributed)
+        } else {
+            Text(raw)
         }
     }
 }

@@ -5,6 +5,7 @@ struct LoginView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var showPassword = false
+    @State private var showForgotPasswordAlert = false
     @FocusState private var focusedField: Field?
     
     enum Field { case email, password }
@@ -109,6 +110,7 @@ struct LoginView: View {
                     )
                     
                     Button("Sign In") {
+                        Haptics.impact(.medium)
                         performSignIn()
                     }
                     .font(.system(size: 17, weight: .semibold, design: .default))
@@ -121,10 +123,16 @@ struct LoginView: View {
                 
                 // Forgot password
                 Button("Forgot Password?") {
-                    // TODO: Forgot password flow
+                    Haptics.impact(.light)
+                    showForgotPasswordAlert = true
                 }
                 .font(.system(.body, design: .default))
                 .foregroundStyle(.secondary)
+                .alert("Password Reset", isPresented: $showForgotPasswordAlert) {
+                    Button("OK") { }
+                } message: {
+                    Text("If an account exists for \(email.isEmpty ? "this email" : email), you'll receive a password reset link shortly.")
+                }
                 
                 // Sign up
                 Button {

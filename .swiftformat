@@ -1,0 +1,30 @@
+# SwiftFormat configuration for OpenNote MVP
+# https://github.com/nicklockwood/SwiftFormat
+
+--swiftversion 5.9
+--indent 4
+--tabwidth 4
+--linebreaks lf
+--trimwhitespace always
+--maxwidth 120
+
+# Formatting
+--allman false
+--elseposition same-line
+--guardelse same-line
+--importgrouping alphabetized
+--nospaceoperators ...,..<
+--ranges spaced
+--self remove
+--semicolons inline
+--wraparguments before-first
+--wrapcollections before-first
+
+# Options
+--decimalgrouping 3,4
+--exponentgrouping enabled
+--hexgrouping 4,4
+--hexliteralcase uppercase
+--octalgrouping 4,4
+--patternlet hoist
+--stripunusedargs closure-only

@@ -10,9 +10,30 @@ struct SidebarView: View {
     var onCreateJournal: () -> Void
     var onCreatePaper: () -> Void
     var onSelectInbox: () -> Void = {}
+    var onDeleteJournal: ((String) -> Void)?
+    var onDeletePaper: ((String) -> Void)?
+    var onRenameJournal: ((Journal) -> Void)?
+    var onRenamePaper: ((Paper) -> Void)?
+    var onFavoriteJournal: ((Journal) -> Void)?
+    var onFavoritePaper: ((Paper) -> Void)?
     
     @State private var journalsExpanded = true
     @State private var papersExpanded = true
+    @State private var journalToRename: Journal?
+    @State private var paperToRename: Paper?
+    @State private var renameText = ""
+    @State private var showJournalRename = false
+    @State private var showPaperRename = false
+    @State private var showUpgradeSheet = false
+    
+    private var recentJournals: [Journal] {
+        Array(journals.sorted { $0.lastEdited > $1.lastEdited }.prefix(2))
+    }
+    private var recentPapers: [Paper] {
+        Array(papers.sorted { $0.lastEdited > $1.lastEdited }.prefix(2))
+    }
+    private var hasMoreJournals: Bool { journals.count > 2 }
+    private var hasMorePapers: Bool { papers.count > 2 }
     
     var body: some View {
         ZStack(alignment: .leading) {
@@ -79,7 +100,11 @@ struct SidebarView: View {
                 
                 // Search, Home, Inbox
                 VStack(alignment: .leading, spacing: 4) {
-                    SidebarRow(icon: "magnifyingglass", title: "Search") { }
+                    SidebarRow(icon: "magnifyingglass", title: "Search") {
+                        Haptics.selection()
+                        isPresented = false
+                        // Search: could present search overlay - for MVP, closing sidebar
+                    }
                     SidebarRow(icon: "house", title: "Home") {
                         isPresented = false
                     }
@@ -99,6 +124,18 @@ struct SidebarView: View {
                         Text("Create Journal")
                             .font(.system(size: 17, design: .default))
                             .foregroundStyle(.primary)
+                        if hasMoreJournals {
+                            Spacer(minLength: 4)
+                            Button {
+                                Haptics.selection()
+                                isPresented = false
+                            } label: {
+                                Text("...more")
+                                    .font(.system(size: 17, design: .default))
+                                    .foregroundStyle(Color.opennoteGreen)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -107,22 +144,12 @@ struct SidebarView: View {
                         onCreateJournal()
                         isPresented = false
                     }
-                    ForEach(journals) { journal in
+                    ForEach(recentJournals) { journal in
                         HStack {
                             Text(journal.title)
                                 .font(.system(.body, design: .default))
                                 .lineLimit(1)
                             Spacer()
-                            Button { } label: {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundStyle(.secondary)
-                            }
-                            Button { } label: {
-                                Image(systemName: "ellipsis")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundStyle(.secondary)
-                            }
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
@@ -130,6 +157,29 @@ struct SidebarView: View {
                         .onTapGesture {
                             onSelectJournal(journal)
                             isPresented = false
+                        }
+                        .contextMenu {
+                            if onRenameJournal != nil {
+                                Button("Rename") {
+                                    journalToRename = journal
+                                    renameText = journal.title
+                                    showJournalRename = true
+                                }
+                            }
+                            if let onFavoriteJournal {
+                                Button {
+                                    var updated = journal
+                                    updated.isFavorite.toggle()
+                                    onFavoriteJournal(updated)
+                                } label: {
+                                    Label(journal.isFavorite ? "Remove from Favorites" : "Add to Favorites", systemImage: journal.isFavorite ? "star.slash" : "star")
+                                }
+                            }
+                            if let onDeleteJournal {
+                                Button(role: .destructive) { onDeleteJournal(journal.id) } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
                         }
                     }
                 } label: {
@@ -149,6 +199,18 @@ struct SidebarView: View {
                         Text("Create Paper")
                             .font(.system(.body, design: .default))
                             .foregroundStyle(.primary)
+                        if hasMorePapers {
+                            Spacer(minLength: 4)
+                            Button {
+                                Haptics.selection()
+                                isPresented = false
+                            } label: {
+                                Text("...more")
+                                    .font(.system(size: 17, design: .default))
+                                    .foregroundStyle(Color.opennoteGreen)
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -158,17 +220,12 @@ struct SidebarView: View {
                         isPresented = false
                     }
                     
-                    ForEach(papers) { paper in
+                    ForEach(recentPapers) { paper in
                         HStack {
                             Text(paper.title)
                                 .font(.system(.body, design: .default))
                                 .lineLimit(1)
                             Spacer()
-                            Button { } label: {
-                                Image(systemName: "ellipsis")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundStyle(.secondary)
-                            }
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
@@ -176,6 +233,29 @@ struct SidebarView: View {
                         .onTapGesture {
                             onSelectPaper(paper)
                             isPresented = false
+                        }
+                        .contextMenu {
+                            if onRenamePaper != nil {
+                                Button("Rename") {
+                                    paperToRename = paper
+                                    renameText = paper.title
+                                    showPaperRename = true
+                                }
+                            }
+                            if let onFavoritePaper {
+                                Button {
+                                    var updated = paper
+                                    updated.isFavorite.toggle()
+                                    onFavoritePaper(updated)
+                                } label: {
+                                    Label(paper.isFavorite ? "Remove from Favorites" : "Add to Favorites", systemImage: paper.isFavorite ? "star.slash" : "star")
+                                }
+                            }
+                            if let onDeletePaper {
+                                Button(role: .destructive) { onDeletePaper(paper.id) } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
                         }
                     }
                 } label: {
@@ -185,9 +265,55 @@ struct SidebarView: View {
                 }
                 .padding(.horizontal, 12)
                 .padding(.top, 4)
-                
-                Spacer()
+
+                Spacer(minLength: 16)
+
+                // Upgrade button at bottom
+                Button {
+                    Haptics.impact(.light)
+                    showUpgradeSheet = true
+                } label: {
+                    Text("Upgrade")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.opennoteGreen)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 24)
             }
+        }
+        .sheet(isPresented: $showUpgradeSheet) {
+            UpgradeSheet(isPresented: $showUpgradeSheet)
+        }
+        .alert("Rename Journal", isPresented: $showJournalRename) {
+            TextField("Title", text: $renameText)
+            Button("Cancel", role: .cancel) { journalToRename = nil }
+            Button("Save") {
+                if var j = journalToRename {
+                    j.title = renameText.isEmpty ? "Untitled Journal" : renameText
+                    onRenameJournal?(j)
+                }
+                journalToRename = nil
+            }
+        } message: {
+            Text("Enter a new title.")
+        }
+        .alert("Rename Paper", isPresented: $showPaperRename) {
+            TextField("Title", text: $renameText)
+            Button("Cancel", role: .cancel) { paperToRename = nil }
+            Button("Save") {
+                if var p = paperToRename {
+                    p.title = renameText.isEmpty ? "Untitled Paper" : renameText
+                    onRenamePaper?(p)
+                }
+                paperToRename = nil
+            }
+        } message: {
+            Text("Enter a new title.")
         }
     }
 }
@@ -226,7 +352,13 @@ struct SidebarRow: View {
         onSelectPaper: { _ in },
         onCreateJournal: {},
         onCreatePaper: {},
-        onSelectInbox: {}
+        onSelectInbox: {},
+        onDeleteJournal: nil,
+        onDeletePaper: nil,
+        onRenameJournal: nil,
+        onRenamePaper: nil,
+        onFavoriteJournal: nil,
+        onFavoritePaper: nil
     )
     .environment(AppViewModel())
 }

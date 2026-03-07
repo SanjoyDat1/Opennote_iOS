@@ -1,81 +1,154 @@
-# OpenNote Clinical
+# OpenNote MVP
 
-AI-first clinical note-taking app for iOS/iPadOS. Embeds a contextual AI tutor for cardiology and radiology workflows.
+<p align="center">
+  <strong>The notebook that thinks with you.</strong>
+</p>
 
-## Phase 1: Foundation & Auth ✓
+OpenNote is an AI-first note-taking app for iOS that combines rich block-based journals, LaTeX papers, and an embedded AI tutor (Feynman) to help you learn and create.
 
-### Setup
+---
 
-1. **Open the project**  
-   Open `OpenNoteClinical.xcodeproj` in Xcode.
+## Features
 
-2. **Configure Supabase**  
-   Edit `OpenNoteClinical/Config/SupabaseConfig.swift`:
-   - Replace `YOUR_PROJECT_REF` with your Supabase project reference
-   - Replace `YOUR_ANON_KEY` with your Supabase anon/public key  
-   (Project Settings → API in the Supabase Dashboard)
+### Journals
+- **Block-based editor** — Paragraphs, headings, bullet lists, numbered lists, checklists, code blocks, callouts, math equations, and Desmos graphs
+- **Ask Feynman** — Inline AI tutor that explains concepts, answers questions, and uses your notes as context
+- **Slash commands** — Type `/` to insert blocks, format text, or trigger AI actions
+- **Make flashcards** — AI generates flashcards from your notes
+- **Practice problems** — AI generates practice problems with solutions
+- **Photo to text** — Capture notes or whiteboards and extract text using AI vision
+- **Long-press actions** — Rename, delete, or favorite journals from the sidebar or home view
 
-3. **Run the database migration**  
-   In Supabase Dashboard → SQL Editor, run the contents of `supabase/migrations/001_notes_schema.sql`.
+### Papers
+- **LaTeX editor** — Write and preview LaTeX with live PDF compilation
+- **Ask Feynman** — AI-assisted LaTeX editing (add abstracts, fix formatting, rewrite sections)
+- **Split view** — Code and PDF side-by-side on iPad
+- **Export** — Compile to PDF, export to Markdown
 
-4. **Enable Auth**  
-   In Supabase Dashboard → Authentication:
-   - Enable **Email** provider
-   - Adjust email templates if desired
+### Design
+- Clean, minimal UI with cream background and green accents
+- Haptic feedback throughout
+- Keyboard toolbar with Done button
+- Responsive layout for iPhone and iPad
 
-### What's implemented
+---
 
-- SwiftUI app with Swift 5.9+ and iOS 17+
-- Supabase Swift SDK (Auth) via SPM
-- SwiftData models: `Note`, `LocalUser`
-- `AuthViewModel` with sign in, sign up, sign out
-- Login/signup screen aligned with Apple HIG
-- Root routing between Auth and Dashboard
-- SQL migration for `notes` table with RLS
+## Requirements
 
-### Verification
+- **Xcode** 15.0+
+- **iOS** 17.0+
+- **Swift** 5.9+
 
-After setup:
+---
 
-1. Build and run on simulator or device
-2. Sign up with an email and password
-3. Confirm you can sign in and see the Dashboard
-4. Use **Sign Out** and confirm you return to the login screen
+## Setup
 
-### Phase 2: Block Editor ✓
+### 1. Clone the repository
 
-Implemented:
-- **NoteViewModel** – block CRUD, insert heading/paragraph/bullet/code/AI, reindex
-- **NoteEditorView** – ScrollView + LazyVStack of blocks, title editing
-- **Block views** – Paragraph, Heading (H1–H3), Bullet list, Numbered list, Code card, AI prompt
-- **Focus & return** – Return on paragraph/heading inserts new paragraph below; Return on last list item inserts paragraph below
-- **Context toolbar** – Keyboard toolbar with H1, H2, H3, Bullet, 1., Code, AI
-- **Delete block** – Long-press/context menu
-- **Dashboard** – Notes list, create note, navigate to editor, delete notes
-- **List “Add item”** – Bullet/numbered lists support adding items via “Add item”
+```bash
+git clone https://github.com/<your-username>/OpenNoteMVP.git
+cd OpenNoteMVP
+```
 
-### Phase 3: AI Clinical Co-Pilot ✓
+### 2. Open the project
 
-Implemented:
-- **Context Engine** – `NoteViewModel.blocksToMarkdown()` converts blocks to Markdown for AI context
-- **OpenAIService** – Streaming chat completions via REST (gpt-4o-mini)
-- **System Prompt** – Clinical Co-Pilot for cardiology/radiology, DICOM/ECG structuring, clarifying questions
-- **AI Sidebar** – `.inspector` (sheet on iPhone, sidebar on iPad) with chat history
-- **Inline AI Block** – Run button streams response into a new paragraph block below
-- **Config** – `OpenAIConfig.swift` for API key
+Open `OpenNoteMVP.xcodeproj` in Xcode. The main app target is **Opennote**.
 
-**Setup:** Add your OpenAI API key in `OpenNoteClinical/Config/OpenAIConfig.swift`.
+### 3. Configure OpenAI (for AI features)
 
-### Phase 4: Semantic Search (RAG) ✓
+1. Get an API key from [OpenAI Platform](https://platform.openai.com/api-keys)
+2. Copy the example config and add your key:
+   ```bash
+   cp Opennote/Config/OpenAIConfig.example.swift Opennote/Config/OpenAIConfig.swift
+   ```
+3. Edit `Opennote/Config/OpenAIConfig.swift` and replace `YOUR_OPENAI_API_KEY` with your key.
 
-Implemented:
-- **pgvector** – `002_pgvector_embeddings.sql`: vector extension, `note_embeddings` table, ivfflat index
-- **Embeddings** – `OpenAIService.embed()` using text-embedding-3-small (1536 dimensions)
-- **Sync + embed** – `NoteSyncService` syncs notes to Supabase and stores embeddings via `upsert_note_embedding` RPC
-- **Semantic search** – `SemanticSearchService` embeds the query and calls `search_notes_by_embedding` RPC (cosine similarity)
-- **Global search bar** – Dashboard `.searchable()` with semantic search on submit
-- **Debounced sync** – Sync on save (2s debounce) and immediate sync when closing the editor
+> **Security:** `OpenAIConfig.swift` is in `.gitignore` and will never be committed. Your API key stays local.
 
-**Setup:**
-1. Run `supabase/migrations/002_pgvector_embeddings.sql` in Supabase SQL Editor.
-2. Enable the `vector` extension in Supabase → Database → Extensions if needed.
+### 4. Build and run
+
+Select the **Opennote** scheme, choose a simulator or device, and run (⌘R).
+
+---
+
+## Project Structure
+
+```
+OpenNoteMVP/
+├── Opennote/                 # Main app
+│   ├── App/                  # App entry point
+│   ├── Config/               # API keys, configuration
+│   ├── DesignSystem/         # Colors, typography, components
+│   ├── Models/               # Journal, Paper, NoteBlock, etc.
+│   ├── Services/             # OpenAI, code execution
+│   ├── ViewModels/           # AppViewModel, JournalEditorViewModel
+│   └── Views/                # All UI
+│       ├── Editor/           # Block views, journal/paper editors
+│       ├── Home/             # Home screen, cards, lists
+│       ├── Inbox/
+│       ├── Sidebar/
+│       └── Upgrade/
+├── OpenNoteClinical/         # Clinical variant (Supabase, RAG)
+├── docs/
+│   └── ARCHITECTURE.md       # Internal architecture
+└── README.md
+```
+
+See [ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed internal structure.
+
+---
+
+## Architecture
+
+- **SwiftUI** — Declarative UI
+- **Observable** — State management (iOS 17+)
+- **MVVM** — ViewModels for editor logic
+- **UserDefaults** — Local persistence for journals and papers (MVP)
+- **OpenAI API** — Streaming chat, vision, non-streaming completions
+
+---
+
+## Slash Commands
+
+Type `/` in the journal editor to open the command palette:
+
+| Section | Commands |
+|---------|----------|
+| **Formatting** | Text, Heading 1–3, Bullet list, Numbered list, Checklist, Quote, Divider |
+| **Advanced** | Code block, LaTeX block, Graph (Desmos), Math equation |
+| **Media** | Image, Photo to text |
+| **AI** | Ask Feynman, Make flashcards, Make practice problems |
+
+---
+
+## Development
+
+### Code formatting
+
+The project includes a [SwiftFormat](https://github.com/nicklockwood/SwiftFormat) config (`.swiftformat`). To format the codebase:
+
+```bash
+brew install swiftformat
+swiftformat Opennote/
+```
+
+### Before pushing to GitHub
+
+- Ensure `Opennote/Config/OpenAIConfig.swift` contains a placeholder (`YOUR_OPENAI_API_KEY`), not your real API key.
+- Run the app locally with your key; never commit secrets.
+
+---
+
+## License
+
+MIT License. See [LICENSE](LICENSE) for details.
+
+---
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request

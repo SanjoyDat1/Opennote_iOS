@@ -10,6 +10,9 @@ extension Color {
     /// Light green for research bar / subtle accents
     static let opennoteLightGreen = Color(hex: "#E8F5E9")
     
+    /// Darker cream for paper airplane (splash) - warm tan/beige
+    static let opennoteCreamDark = Color(hex: "#C9C5B8")
+    
     init(hex: String) {
         let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
         var int: UInt64 = 0

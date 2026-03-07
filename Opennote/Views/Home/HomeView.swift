@@ -18,6 +18,12 @@ struct HomeView: View {
     var onCreatePaper: () -> Void
     var onSelectJournal: (Journal) -> Void
     var onSelectPaper: (Paper) -> Void
+    var onDeleteJournal: ((String) -> Void)?
+    var onDeletePaper: ((String) -> Void)?
+    var onRenameJournal: ((Journal) -> Void)?
+    var onRenamePaper: ((Paper) -> Void)?
+    var onFavoriteJournal: ((Journal) -> Void)?
+    var onFavoritePaper: ((Paper) -> Void)?
     
     @State private var filter: HomeFilter = .all
     @State private var viewMode: HomeViewMode = .grid
@@ -143,7 +149,13 @@ struct HomeView: View {
                         onCreatePaper()
                     }
                     ForEach(papers) { paper in
-                        PaperCard(paper: paper, onTap: { onSelectPaper(paper) })
+                        PaperCard(
+                            paper: paper,
+                            onTap: { onSelectPaper(paper) },
+                            onDelete: { onDeletePaper?(paper.id) },
+                            onRename: onRenamePaper,
+                            onFavorite: onFavoritePaper
+                        )
                     }
                 }
             } else {
@@ -152,7 +164,13 @@ struct HomeView: View {
                         onCreatePaper()
                     }
                     ForEach(papers) { paper in
-                        PaperListRow(paper: paper, onTap: { onSelectPaper(paper) })
+                        PaperListRow(
+                            paper: paper,
+                            onTap: { onSelectPaper(paper) },
+                            onDelete: { onDeletePaper?(paper.id) },
+                            onRename: onRenamePaper,
+                            onFavorite: onFavoritePaper
+                        )
                     }
                 }
             }
@@ -190,7 +208,13 @@ struct HomeView: View {
                         onCreateJournal()
                     }
                     ForEach(journals) { journal in
-                        JournalCard(journal: journal, onTap: { onSelectJournal(journal) })
+                        JournalCard(
+                            journal: journal,
+                            onTap: { onSelectJournal(journal) },
+                            onDelete: { onDeleteJournal?(journal.id) },
+                            onRename: onRenameJournal,
+                            onFavorite: onFavoriteJournal
+                        )
                     }
                 }
             } else {
@@ -199,7 +223,13 @@ struct HomeView: View {
                         onCreateJournal()
                     }
                     ForEach(journals) { journal in
-                        JournalListRow(journal: journal, onTap: { onSelectJournal(journal) })
+                        JournalListRow(
+                            journal: journal,
+                            onTap: { onSelectJournal(journal) },
+                            onDelete: { onDeleteJournal?(journal.id) },
+                            onRename: onRenameJournal,
+                            onFavorite: onFavoriteJournal
+                        )
                     }
                 }
             }
@@ -295,6 +325,12 @@ struct CreateCardList: View {
 struct PaperCard: View {
     let paper: Paper
     let onTap: () -> Void
+    var onDelete: (() -> Void)?
+    var onRename: ((Paper) -> Void)?
+    var onFavorite: ((Paper) -> Void)?
+    
+    @State private var showRenameAlert = false
+    @State private var renameText = ""
     
     var body: some View {
         Button(action: onTap) {
@@ -304,8 +340,29 @@ struct PaperCard: View {
                         .font(.system(size: 18, weight: .light))
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button { } label: {
-                        Image(systemName: "trash")
+                    Menu {
+                        if onRename != nil {
+                            Button("Rename") {
+                                renameText = paper.title
+                                showRenameAlert = true
+                            }
+                        }
+                        if let onFavorite {
+                            Button {
+                                var updated = paper
+                                updated.isFavorite.toggle()
+                                onFavorite(updated)
+                            } label: {
+                                Label(paper.isFavorite ? "Remove from Favorites" : "Add to Favorites", systemImage: paper.isFavorite ? "star.slash" : "star")
+                            }
+                        }
+                        if let onDelete {
+                            Button(role: .destructive) { onDelete() } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
                             .font(.system(size: 14, weight: .light))
                             .foregroundStyle(.secondary)
                     }
@@ -323,12 +380,51 @@ struct PaperCard: View {
             .opennoteCard()
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            if onRename != nil {
+                Button("Rename") {
+                    renameText = paper.title
+                    showRenameAlert = true
+                }
+            }
+            if let onFavorite {
+                Button {
+                    var updated = paper
+                    updated.isFavorite.toggle()
+                    onFavorite(updated)
+                } label: {
+                    Label(paper.isFavorite ? "Remove from Favorites" : "Add to Favorites", systemImage: paper.isFavorite ? "star.slash" : "star")
+                }
+            }
+            if let onDelete {
+                Button(role: .destructive) { onDelete() } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        }
+        .alert("Rename Paper", isPresented: $showRenameAlert) {
+            TextField("Title", text: $renameText)
+            Button("Cancel", role: .cancel) { }
+            Button("Save") {
+                var updated = paper
+                updated.title = renameText.isEmpty ? "Untitled Paper" : renameText
+                onRename?(updated)
+            }
+        } message: {
+            Text("Enter a new title for this paper.")
+        }
     }
 }
 
 struct PaperListRow: View {
     let paper: Paper
     let onTap: () -> Void
+    var onDelete: (() -> Void)?
+    var onRename: ((Paper) -> Void)?
+    var onFavorite: ((Paper) -> Void)?
+    
+    @State private var showRenameAlert = false
+    @State private var renameText = ""
     
     var body: some View {
         Button(action: onTap) {
@@ -340,20 +436,82 @@ struct PaperListRow: View {
                     .font(.system(.body, design: .default))
                     .foregroundStyle(.primary)
                 Spacer()
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 14, weight: .light))
-                    .foregroundStyle(.secondary)
+                Menu {
+                    if onRename != nil {
+                        Button("Rename") {
+                            renameText = paper.title
+                            showRenameAlert = true
+                        }
+                    }
+                    if let onFavorite {
+                        Button {
+                            var updated = paper
+                            updated.isFavorite.toggle()
+                            onFavorite(updated)
+                        } label: {
+                            Label(paper.isFavorite ? "Remove from Favorites" : "Add to Favorites", systemImage: paper.isFavorite ? "star.slash" : "star")
+                        }
+                    }
+                    if let onDelete {
+                        Button(role: .destructive) { onDelete() } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .light))
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding(16)
             .opennoteCard()
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            if onRename != nil {
+                Button("Rename") {
+                    renameText = paper.title
+                    showRenameAlert = true
+                }
+            }
+            if let onFavorite {
+                Button {
+                    var updated = paper
+                    updated.isFavorite.toggle()
+                    onFavorite(updated)
+                } label: {
+                    Label(paper.isFavorite ? "Remove from Favorites" : "Add to Favorites", systemImage: paper.isFavorite ? "star.slash" : "star")
+                }
+            }
+            if let onDelete {
+                Button(role: .destructive) { onDelete() } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        }
+        .alert("Rename Paper", isPresented: $showRenameAlert) {
+            TextField("Title", text: $renameText)
+            Button("Cancel", role: .cancel) { }
+            Button("Save") {
+                var updated = paper
+                updated.title = renameText.isEmpty ? "Untitled Paper" : renameText
+                onRename?(updated)
+            }
+        } message: {
+            Text("Enter a new title.")
+        }
     }
 }
 
 struct JournalCard: View {
     let journal: Journal
     let onTap: () -> Void
+    var onDelete: (() -> Void)?
+    var onRename: ((Journal) -> Void)?
+    var onFavorite: ((Journal) -> Void)?
+    
+    @State private var showRenameAlert = false
+    @State private var renameText = ""
     
     var body: some View {
         Button(action: onTap) {
@@ -368,7 +526,28 @@ struct JournalCard: View {
                                 .font(.system(size: 12))
                                 .foregroundStyle(.secondary)
                         )
-                    Button { } label: {
+                    Menu {
+                        if onRename != nil {
+                            Button("Rename") {
+                                renameText = journal.title
+                                showRenameAlert = true
+                            }
+                        }
+                        if let onFavorite {
+                            Button {
+                                var updated = journal
+                                updated.isFavorite.toggle()
+                                onFavorite(updated)
+                            } label: {
+                                Label(journal.isFavorite ? "Remove from Favorites" : "Add to Favorites", systemImage: journal.isFavorite ? "star.slash" : "star")
+                            }
+                        }
+                        if let onDelete {
+                            Button(role: .destructive) { onDelete() } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                    } label: {
                         Image(systemName: "ellipsis")
                             .font(.system(size: 14, weight: .light))
                             .foregroundStyle(.secondary)
@@ -387,12 +566,51 @@ struct JournalCard: View {
             .opennoteCard()
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            if onRename != nil {
+                Button("Rename") {
+                    renameText = journal.title
+                    showRenameAlert = true
+                }
+            }
+            if let onFavorite {
+                Button {
+                    var updated = journal
+                    updated.isFavorite.toggle()
+                    onFavorite(updated)
+                } label: {
+                    Label(journal.isFavorite ? "Remove from Favorites" : "Add to Favorites", systemImage: journal.isFavorite ? "star.slash" : "star")
+                }
+            }
+            if let onDelete {
+                Button(role: .destructive) { onDelete() } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        }
+        .alert("Rename Journal", isPresented: $showRenameAlert) {
+            TextField("Title", text: $renameText)
+            Button("Cancel", role: .cancel) { }
+            Button("Save") {
+                var updated = journal
+                updated.title = renameText.isEmpty ? "Untitled Journal" : renameText
+                onRename?(updated)
+            }
+        } message: {
+            Text("Enter a new title for this journal.")
+        }
     }
 }
 
 struct JournalListRow: View {
     let journal: Journal
     let onTap: () -> Void
+    var onDelete: (() -> Void)?
+    var onRename: ((Journal) -> Void)?
+    var onFavorite: ((Journal) -> Void)?
+    
+    @State private var showRenameAlert = false
+    @State private var renameText = ""
     
     var body: some View {
         Button(action: onTap) {
@@ -404,14 +622,70 @@ struct JournalListRow: View {
                     .font(.system(.body, design: .default))
                     .foregroundStyle(.primary)
                 Spacer()
-                Image(systemName: "ellipsis")
-                    .font(.system(size: 14, weight: .light))
-                    .foregroundStyle(.secondary)
+                Menu {
+                    if onRename != nil {
+                        Button("Rename") {
+                            renameText = journal.title
+                            showRenameAlert = true
+                        }
+                    }
+                    if let onFavorite {
+                        Button {
+                            var updated = journal
+                            updated.isFavorite.toggle()
+                            onFavorite(updated)
+                        } label: {
+                            Label(journal.isFavorite ? "Remove from Favorites" : "Add to Favorites", systemImage: journal.isFavorite ? "star.slash" : "star")
+                        }
+                    }
+                    if let onDelete {
+                        Button(role: .destructive) { onDelete() } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .light))
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding(16)
             .opennoteCard()
         }
         .buttonStyle(.plain)
+        .contextMenu {
+            if onRename != nil {
+                Button("Rename") {
+                    renameText = journal.title
+                    showRenameAlert = true
+                }
+            }
+            if let onFavorite {
+                Button {
+                    var updated = journal
+                    updated.isFavorite.toggle()
+                    onFavorite(updated)
+                } label: {
+                    Label(journal.isFavorite ? "Remove from Favorites" : "Add to Favorites", systemImage: journal.isFavorite ? "star.slash" : "star")
+                }
+            }
+            if let onDelete {
+                Button(role: .destructive) { onDelete() } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        }
+        .alert("Rename Journal", isPresented: $showRenameAlert) {
+            TextField("Title", text: $renameText)
+            Button("Cancel", role: .cancel) { }
+            Button("Save") {
+                var updated = journal
+                updated.title = renameText.isEmpty ? "Untitled Journal" : renameText
+                onRename?(updated)
+            }
+        } message: {
+            Text("Enter a new title.")
+        }
     }
 }
 
@@ -422,6 +696,12 @@ struct JournalListRow: View {
         onCreateJournal: {},
         onCreatePaper: {},
         onSelectJournal: { _ in },
-        onSelectPaper: { _ in }
+        onSelectPaper: { _ in },
+        onDeleteJournal: nil,
+        onDeletePaper: nil,
+        onRenameJournal: nil,
+        onRenamePaper: nil,
+        onFavoriteJournal: nil,
+        onFavoritePaper: nil
     )
 }

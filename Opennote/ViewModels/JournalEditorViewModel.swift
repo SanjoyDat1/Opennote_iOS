@@ -57,7 +57,7 @@ final class JournalEditorViewModel {
     }
 
     func insertCodeCard(after blockId: UUID) {
-        insertBlock(after: blockId, newBlock: NoteBlock(orderIndex: 0, blockType: .codeCard(language: "swift", code: "")))
+        insertBlock(after: blockId, newBlock: NoteBlock(orderIndex: 0, blockType: .codeCard(language: "Python", code: "", stdin: "", stdout: "")))
     }
 
     @discardableResult
@@ -67,8 +67,119 @@ final class JournalEditorViewModel {
         return newBlock.id
     }
 
+    @discardableResult
+    func insertGraphBlock(after blockId: UUID) -> UUID {
+        let newBlock = NoteBlock(orderIndex: 0, blockType: .graphBlock(expression: ""))
+        insertBlock(after: blockId, newBlock: newBlock)
+        return newBlock.id
+    }
+
+    @discardableResult
+    func insertMathBlock(after blockId: UUID) -> UUID {
+        let newBlock = NoteBlock(orderIndex: 0, blockType: .mathBlock(latex: ""))
+        insertBlock(after: blockId, newBlock: newBlock)
+        return newBlock.id
+    }
+
+    func insertCallout(after blockId: UUID) {
+        insertBlock(after: blockId, newBlock: NoteBlock(orderIndex: 0, blockType: .callout(text: "")))
+    }
+
+    func insertTodo(after blockId: UUID) {
+        insertBlock(after: blockId, newBlock: NoteBlock(orderIndex: 0, blockType: .todo(items: [TodoItem(text: "", done: false)])))
+    }
+
+    func insertDivider(after blockId: UUID) {
+        insertBlock(after: blockId, newBlock: NoteBlock(orderIndex: 0, blockType: .divider))
+    }
+
     func blocksToMarkdown() -> String {
         NoteBlock.toMarkdown(blocks)
+    }
+
+    /// Total word count across all text content in blocks.
+    func wordCount() -> Int {
+        blocks.reduce(0) { count, block in
+            let text = blockTextContent(block)
+            let words = text.components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }
+            return count + words.count
+        }
+    }
+
+    private func blockTextContent(_ block: NoteBlock) -> String {
+        switch block.blockType {
+        case .heading(_, let t): return t
+        case .paragraph(let t): return t
+        case .bulletList(let items): return items.joined(separator: " ")
+        case .numberedList(let items): return items.joined(separator: " ")
+        case .codeCard(_, let c, _, _): return c
+        case .aiPrompt(let cmd, let r): return cmd + " " + (r ?? "")
+        case .callout(let t): return t
+        case .todo(let items): return items.map(\.text).joined(separator: " ")
+        case .divider: return ""
+        case .graphBlock(let e): return e
+        case .mathBlock(let l): return l
+        case .flashcardSet(let items): return items.map { $0.front + " " + $0.back }.joined(separator: " ")
+        case .practiceProblems(let items): return items.map { $0.question + " " + $0.answer }.joined(separator: " ")
+        }
+    }
+
+    func insertFlashcardSet(after blockId: UUID) -> UUID {
+        let newBlock = NoteBlock(orderIndex: 0, blockType: .flashcardSet(items: []))
+        insertBlock(after: blockId, newBlock: newBlock)
+        return newBlock.id
+    }
+
+    func insertPracticeProblems(after blockId: UUID) -> UUID {
+        let newBlock = NoteBlock(orderIndex: 0, blockType: .practiceProblems(items: []))
+        insertBlock(after: blockId, newBlock: newBlock)
+        return newBlock.id
+    }
+
+    @MainActor
+    func generateFlashcards(blockId: UUID) async {
+        guard let idx = blocks.firstIndex(where: { $0.id == blockId }) else { return }
+        guard case .flashcardSet = blocks[idx].blockType else { return }
+
+        runningAIBlockId = blockId
+        defer { runningAIBlockId = nil }
+
+        let context = blocksToMarkdown()
+        let openAI = OpenAIService.shared
+        guard openAI.isConfigured else {
+            updateBlock(id: blockId, blockType: .flashcardSet(items: [FlashcardItem(front: "Add your OpenAI API key in OpenAIConfig to use Feynman.", back: "")]))
+            return
+        }
+
+        if let pairs = await openAI.generateFlashcards(from: context) {
+            let items = pairs.map { FlashcardItem(front: $0.front, back: $0.back) }
+            updateBlock(id: blockId, blockType: .flashcardSet(items: items))
+        } else {
+            updateBlock(id: blockId, blockType: .flashcardSet(items: [FlashcardItem(front: "Could not generate flashcards. Try again.", back: "")]))
+        }
+    }
+
+    @MainActor
+    func generatePracticeProblems(blockId: UUID) async {
+        guard let idx = blocks.firstIndex(where: { $0.id == blockId }) else { return }
+        guard case .practiceProblems = blocks[idx].blockType else { return }
+
+        runningAIBlockId = blockId
+        defer { runningAIBlockId = nil }
+
+        let context = blocksToMarkdown()
+        let openAI = OpenAIService.shared
+        guard openAI.isConfigured else {
+            updateBlock(id: blockId, blockType: .practiceProblems(items: [PracticeProblemItem(question: "Add your OpenAI API key in OpenAIConfig to use Feynman.", answer: "")]))
+            return
+        }
+
+        if let pairs = await openAI.generatePracticeProblems(from: context) {
+            let items = pairs.map { PracticeProblemItem(question: $0.question, answer: $0.answer) }
+            updateBlock(id: blockId, blockType: .practiceProblems(items: items))
+        } else {
+            updateBlock(id: blockId, blockType: .practiceProblems(items: [PracticeProblemItem(question: "Could not generate practice problems. Try again.", answer: "")]))
+        }
     }
 
     /// Run Feynman AI on an AI prompt block. Streams response into a new paragraph block below.

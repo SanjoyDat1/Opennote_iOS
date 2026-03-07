@@ -34,8 +34,24 @@
 		B2000019 /* AIPromptBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000119 /* AIPromptBlockView.swift */; };
 		B200001A /* OpenAIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200011A /* OpenAIConfig.swift */; };
 		B200001C /* PaperEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200011C /* PaperEditorView.swift */; };
+		B200001D /* TutorialView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200011D /* TutorialView.swift */; };
+		B200001E /* Haptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200011E /* Haptics.swift */; };
+		B200001F /* NotesStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200011F /* NotesStore.swift */; };
+		B2000020 /* Toast.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000120 /* Toast.swift */; };
+		B2000021 /* GraphBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000121 /* GraphBlockView.swift */; };
+		B2000022 /* MathBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000122 /* MathBlockView.swift */; };
+		B2000023 /* JournalSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000123 /* JournalSettingsSheet.swift */; };
 		B200001B /* OpenAIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200011B /* OpenAIService.swift */; };
+		B2000024 /* PaperTemplate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000124 /* PaperTemplate.swift */; };
+		B2000025 /* PaperSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000125 /* PaperSettingsSheet.swift */; };
+		B2000026 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000126 /* AppSettings.swift */; };
+		B2000027 /* SettingsComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000127 /* SettingsComponents.swift */; };
 		B2000030 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B2000130 /* Assets.xcassets */; };
+		B2000031 /* SlashCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000131 /* SlashCommand.swift */; };
+		B2000032 /* SlashCommandPaletteView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000132 /* SlashCommandPaletteView.swift */; };
+		B2000033 /* FlashcardBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000133 /* FlashcardBlockView.swift */; };
+		B2000034 /* PracticeProblemsBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000134 /* PracticeProblemsBlockView.swift */; };
+		B2000035 /* PhotoToTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000135 /* PhotoToTextView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -68,6 +84,22 @@
 		B200011A /* OpenAIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIConfig.swift; sourceTree = "<group>"; };
 		B200011B /* OpenAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIService.swift; sourceTree = "<group>"; };
 		B200011C /* PaperEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperEditorView.swift; sourceTree = "<group>"; };
+		B200011D /* TutorialView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialView.swift; sourceTree = "<group>"; };
+		B200011E /* Haptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Haptics.swift; sourceTree = "<group>"; };
+		B200011F /* NotesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesStore.swift; sourceTree = "<group>"; };
+		B2000120 /* Toast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Toast.swift; sourceTree = "<group>"; };
+		B2000121 /* GraphBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphBlockView.swift; sourceTree = "<group>"; };
+		B2000122 /* MathBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MathBlockView.swift; sourceTree = "<group>"; };
+		B2000123 /* JournalSettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalSettingsSheet.swift; sourceTree = "<group>"; };
+		B2000124 /* PaperTemplate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperTemplate.swift; sourceTree = "<group>"; };
+		B2000125 /* PaperSettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperSettingsSheet.swift; sourceTree = "<group>"; };
+		B2000126 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+		B2000127 /* SettingsComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsComponents.swift; sourceTree = "<group>"; };
+		B2000131 /* SlashCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlashCommand.swift; sourceTree = "<group>"; };
+		B2000132 /* SlashCommandPaletteView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SlashCommandPaletteView.swift; sourceTree = "<group>"; };
+		B2000133 /* FlashcardBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlashcardBlockView.swift; sourceTree = "<group>"; };
+		B2000134 /* PracticeProblemsBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeProblemsBlockView.swift; sourceTree = "<group>"; };
+		B2000135 /* PhotoToTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoToTextView.swift; sourceTree = "<group>"; };
 		B2000130 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -135,6 +167,8 @@
 				B2000102 /* Colors.swift */,
 				B2000103 /* Typography.swift */,
 				B2000104 /* CardStyle.swift */,
+				B200011E /* Haptics.swift */,
+				B2000120 /* Toast.swift */,
 			);
 			path = DesignSystem;
 			sourceTree = "<group>";
@@ -145,6 +179,10 @@
 				B2000105 /* Journal.swift */,
 				B2000106 /* Paper.swift */,
 				B2000111 /* NoteBlock.swift */,
+				B2000131 /* SlashCommand.swift */,
+				B200011F /* NotesStore.swift */,
+				B2000124 /* PaperTemplate.swift */,
+				B2000126 /* AppSettings.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -166,6 +204,7 @@
 				B2000208 /* Inbox */,
 				B2000209 /* Editor */,
 				B2000108 /* SplashView.swift */,
+				B200011D /* TutorialView.swift */,
 				B2000109 /* LoginView.swift */,
 				B200010A /* OnboardingView.swift */,
 				B200010B /* RootView.swift */,
@@ -210,6 +249,15 @@
 				B2000117 /* NumberedListBlockView.swift */,
 				B2000118 /* CodeCardBlockView.swift */,
 				B2000119 /* AIPromptBlockView.swift */,
+				B2000121 /* GraphBlockView.swift */,
+				B2000122 /* MathBlockView.swift */,
+				B2000132 /* SlashCommandPaletteView.swift */,
+				B2000133 /* FlashcardBlockView.swift */,
+				B2000134 /* PracticeProblemsBlockView.swift */,
+				B2000135 /* PhotoToTextView.swift */,
+				B2000123 /* JournalSettingsSheet.swift */,
+				B2000125 /* PaperSettingsSheet.swift */,
+				B2000127 /* SettingsComponents.swift */,
 			);
 			path = Editor;
 			sourceTree = "<group>";
@@ -308,7 +356,23 @@
 				B2000019 /* AIPromptBlockView.swift in Sources */,
 				B200001A /* OpenAIConfig.swift in Sources */,
 				B200001C /* PaperEditorView.swift in Sources */,
+				B200001D /* TutorialView.swift in Sources */,
+				B200001E /* Haptics.swift in Sources */,
+				B200001F /* NotesStore.swift in Sources */,
+				B2000020 /* Toast.swift in Sources */,
+				B2000021 /* GraphBlockView.swift in Sources */,
+				B2000022 /* MathBlockView.swift in Sources */,
+				B2000023 /* JournalSettingsSheet.swift in Sources */,
 				B200001B /* OpenAIService.swift in Sources */,
+				B2000024 /* PaperTemplate.swift in Sources */,
+				B2000025 /* PaperSettingsSheet.swift in Sources */,
+				B2000026 /* AppSettings.swift in Sources */,
+				B2000027 /* SettingsComponents.swift in Sources */,
+				B2000031 /* SlashCommand.swift in Sources */,
+				B2000032 /* SlashCommandPaletteView.swift in Sources */,
+				B2000033 /* FlashcardBlockView.swift in Sources */,
+				B2000034 /* PracticeProblemsBlockView.swift in Sources */,
+				B2000035 /* PhotoToTextView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

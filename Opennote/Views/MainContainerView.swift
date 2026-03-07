@@ -2,38 +2,34 @@ import SwiftUI
 
 struct MainContainerView: View {
     @Environment(AppViewModel.self) private var appViewModel
+    @Environment(NotesStore.self) private var notesStore
     @State private var showSidebar = false
     @State private var showInbox = false
     @State private var selectedJournal: Journal?
     @State private var selectedPaper: Paper?
     
-    // MVP mock data
-    @State private var journals: [Journal] = [
-        Journal(title: "My First Journal", lastEdited: Date())
-    ]
-    @State private var papers: [Paper] = [
-        Paper(title: "Untitled Paper", lastEdited: Date())
-    ]
-    
     var body: some View {
         NavigationStack {
             ZStack(alignment: .leading) {
                 HomeView(
-                    journals: journals,
-                    papers: papers,
+                    journals: notesStore.journals,
+                    papers: notesStore.papers,
                     onCreateJournal: { createJournal() },
                     onCreatePaper: { createPaper() },
-                    onSelectJournal: { journal in
-                        selectedJournal = journal
-                    },
-                    onSelectPaper: { paper in
-                        selectedPaper = paper
-                    }
+                    onSelectJournal: { selectedJournal = $0 },
+                    onSelectPaper: { selectedPaper = $0 },
+                    onDeleteJournal: { notesStore.deleteJournal(id: $0) },
+                    onDeletePaper: { notesStore.deletePaper(id: $0) },
+                    onRenameJournal: { notesStore.updateJournal($0) },
+                    onRenamePaper: { notesStore.updatePaper($0) },
+                    onFavoriteJournal: { notesStore.updateJournal($0) },
+                    onFavoritePaper: { notesStore.updatePaper($0) }
                 )
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button {
-                            showSidebar = true
+                            Haptics.impact(.light)
+                            withAnimation(.easeOut(duration: 0.25)) { showSidebar = true }
                         } label: {
                             Image(systemName: "line.3.horizontal")
                                 .font(.system(size: 20, weight: .light))
@@ -51,10 +47,29 @@ struct MainContainerView: View {
                     }
                 }
                 .navigationDestination(item: $selectedJournal) { journal in
-                    JournalEditorView(journal: journal)
+                    JournalEditorView(
+                        journal: journal,
+                        initialBlocks: notesStore.pendingBlocksForJournalId[journal.id],
+                        onDelete: {
+                            notesStore.deleteJournal(id: journal.id)
+                            selectedJournal = nil
+                        },
+                        onCloneSelect: { newJournal in
+                            selectedJournal = newJournal
+                        }
+                    )
                 }
                 .navigationDestination(item: $selectedPaper) { paper in
-                    PaperEditorView(paper: paper)
+                    PaperEditorView(
+                        paper: paper,
+                        onDelete: {
+                            notesStore.deletePaper(id: paper.id)
+                            selectedPaper = nil
+                        },
+                        onCloneSelect: { newPaper in
+                            selectedPaper = newPaper
+                        }
+                    )
                 }
                 .sheet(isPresented: $showInbox) {
                     InboxView(isPresented: $showInbox)
@@ -64,13 +79,16 @@ struct MainContainerView: View {
                 if showSidebar {
                     Color.black.opacity(0.3)
                         .ignoresSafeArea()
-                        .onTapGesture { showSidebar = false }
+                        .onTapGesture {
+                            Haptics.impact(.light)
+                            withAnimation(.easeOut(duration: 0.2)) { showSidebar = false }
+                        }
                     
                     HStack(spacing: 0) {
                         SidebarView(
                             isPresented: $showSidebar,
-                            journals: journals,
-                            papers: papers,
+                            journals: notesStore.journals,
+                            papers: notesStore.papers,
                             onSelectJournal: { journal in
                                 selectedJournal = journal
                                 showSidebar = false
@@ -90,7 +108,13 @@ struct MainContainerView: View {
                             onSelectInbox: {
                                 showSidebar = false
                                 showInbox = true
-                            }
+                            },
+                            onDeleteJournal: { notesStore.deleteJournal(id: $0) },
+                            onDeletePaper: { notesStore.deletePaper(id: $0) },
+                            onRenameJournal: { notesStore.updateJournal($0) },
+                            onRenamePaper: { notesStore.updatePaper($0) },
+                            onFavoriteJournal: { notesStore.updateJournal($0) },
+                            onFavoritePaper: { notesStore.updatePaper($0) }
                         )
                         .frame(maxWidth: 320)
                         
@@ -102,14 +126,16 @@ struct MainContainerView: View {
     }
     
     private func createJournal() {
+        Haptics.impact(.light)
         let journal = Journal(title: "Untitled Journal")
-        journals.append(journal)
+        notesStore.addJournal(journal)
         selectedJournal = journal
     }
     
     private func createPaper() {
-        let paper = Paper(title: "Untitled Paper")
-        papers.append(paper)
+        Haptics.impact(.light)
+        let paper = Paper(title: "Untitled Paper", content: PaperTemplate.defaultContent)
+        notesStore.addPaper(paper)
         selectedPaper = paper
     }
 }

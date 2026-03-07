@@ -26,87 +26,94 @@ struct OnboardingView: View {
             Color.opennoteCream
                 .ignoresSafeArea()
             
-            VStack(spacing: 24) {
-                Text("How did you hear about Opennote?")
-                    .opennoteMajorHeader()
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-                    .padding(.top, 40)
-                
-                // 2-column grid of selectable cards
-                LazyVGrid(columns: [
-                    GridItem(.flexible(), spacing: 12),
-                    GridItem(.flexible(), spacing: 12)
-                ], spacing: 12) {
-                    ForEach(referralOptions, id: \.self) { option in
-                        OnboardingOptionCard(
-                            title: option,
-                            isSelected: selectedSource == option,
-                            onTap: {
-                                selectedSource = option
+            VStack(spacing: 0) {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 24) {
+                        Text("How did you hear about Opennote?")
+                            .font(.system(size: 28, weight: .bold, design: .serif))
+                            .foregroundStyle(.primary)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, 24)
+                            .padding(.top, 40)
+                        
+                        // 2-column grid with fixed-height cards
+                        LazyVGrid(columns: [
+                            GridItem(.flexible(), spacing: 12),
+                            GridItem(.flexible(), spacing: 12)
+                        ], spacing: 12) {
+                            ForEach(referralOptions, id: \.self) { option in
+                                OnboardingOptionCard(
+                                    title: option,
+                                    isSelected: selectedSource == option,
+                                    onTap: { selectedSource = option }
+                                )
                             }
-                        )
-                    }
-                }
-                .padding(.horizontal, 20)
-                
-                // Help link
-                Button {
-                    // TODO: Open Opennote guide
-                } label: {
-                    Text("Want more help? ")
-                        .foregroundStyle(.secondary)
-                    + Text("Check out the Opennote guide")
-                        .foregroundStyle(.primary)
-                        .underline()
-                }
-                .font(.system(.body, design: .default))
-                
-                Spacer()
-                
-                // Bottom: Back, progress dots, Get Started
-                VStack(spacing: 16) {
-                    HStack {
+                        }
+                        .padding(.horizontal, 20)
+                        
+                        // Help link
                         Button {
-                            if currentStep > 0 {
-                                currentStep -= 1
+                            Haptics.impact(.light)
+                            if let url = URL(string: "https://opennote.com") {
+                                UIApplication.shared.open(url)
                             }
                         } label: {
-                            Image(systemName: "chevron.left")
-                                .font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(.primary)
-                                .frame(width: 44, height: 44)
-                                .background(Color(.systemGray5))
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                            Text("Want more help? ")
+                                .foregroundStyle(.secondary)
+                            + Text("Check out the Opennote guide")
+                                .foregroundStyle(Color.opennoteGreen)
+                                .underline()
                         }
-                        .buttonStyle(.plain)
-                        
-                        Spacer()
-                        
-                        // Progress dots (8 steps, green for active)
-                        HStack(spacing: 6) {
-                            ForEach(0..<totalSteps, id: \.self) { index in
-                                Circle()
-                                    .fill(index <= currentStep ? Color.opennoteGreen : Color(.systemGray4))
-                                    .frame(width: 8, height: 8)
-                            }
-                        }
-                        
-                        Spacer()
-                        
-                        Button("Get Started") {
-                            onComplete(selectedSource)
-                        }
-                        .font(.system(size: 17, weight: .semibold, design: .default))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 20)
-                        .padding(.vertical, 12)
-                        .background(Color.opennoteGreen)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .font(.system(.body, design: .default))
+                        .padding(.bottom, 24)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 32)
                 }
+                
+                // Bottom: evenly spaced Back, dots, Get Started
+                HStack(spacing: 0) {
+                    Button {
+                        Haptics.impact(.light)
+                        if currentStep > 0 {
+                            currentStep -= 1
+                        }
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(.primary)
+                            .frame(width: 44, height: 44)
+                            .background(Color(.systemGray5))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Spacer()
+                    
+                    HStack(spacing: 6) {
+                        ForEach(0..<totalSteps, id: \.self) { index in
+                            Circle()
+                                .fill(index <= currentStep ? Color.opennoteGreen : Color(.systemGray4))
+                                .frame(width: 8, height: 8)
+                        }
+                    }
+                    
+                    Spacer()
+                    
+                    Button("Get Started") {
+                        Haptics.impact(.medium)
+                        onComplete(selectedSource)
+                    }
+                    .font(.system(size: 17, weight: .semibold, design: .default))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 12)
+                    .background(Color.opennoteGreen)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 20)
+                .background(Color.opennoteCream)
             }
         }
     }
@@ -117,15 +124,19 @@ struct OnboardingOptionCard: View {
     let isSelected: Bool
     let onTap: () -> Void
     
+    private let cardHeight: CGFloat = 56
+    
     var body: some View {
         Button(action: onTap) {
-            HStack {
+            HStack(spacing: 12) {
                 Text(title)
-                    .font(.system(.body, design: .default))
+                    .font(.system(size: 15, weight: .regular, design: .default))
                     .foregroundStyle(.primary)
                     .multilineTextAlignment(.leading)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
                 
-                Spacer()
+                Spacer(minLength: 8)
                 
                 ZStack {
                     Circle()
@@ -138,7 +149,9 @@ struct OnboardingOptionCard: View {
                     }
                 }
             }
-            .padding(16)
+            .padding(.horizontal, 14)
+            .frame(maxWidth: .infinity)
+            .frame(height: cardHeight)
             .background(Color.white)
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 4)

@@ -22,3 +22,6 @@ xcuserdata/
 # local env
 .env
 .env*.local
+
+# API keys (use OpenAIConfig.example.swift as template)
+Opennote/Config/OpenAIConfig.swift
