@@ -29,7 +29,7 @@ struct MainContainerView: View {
                     ToolbarItem(placement: .topBarLeading) {
                         Button {
                             Haptics.impact(.light)
-                            withAnimation(.easeOut(duration: 0.25)) { showSidebar = true }
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { showSidebar = true }
                         } label: {
                             Image(systemName: "line.3.horizontal")
                                 .font(.system(size: 20, weight: .light))
@@ -81,9 +81,10 @@ struct MainContainerView: View {
                         .ignoresSafeArea()
                         .onTapGesture {
                             Haptics.impact(.light)
-                            withAnimation(.easeOut(duration: 0.2)) { showSidebar = false }
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { showSidebar = false }
                         }
-                    
+                        .transition(.opacity)
+
                     HStack(spacing: 0) {
                         SidebarView(
                             isPresented: $showSidebar,
@@ -117,11 +118,13 @@ struct MainContainerView: View {
                             onFavoritePaper: { notesStore.updatePaper($0) }
                         )
                         .frame(maxWidth: 320)
-                        
+
                         Spacer()
                     }
+                    .transition(.move(edge: .leading))
                 }
             }
+            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showSidebar)
         }
     }
     

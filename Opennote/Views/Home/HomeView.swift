@@ -33,9 +33,10 @@ struct HomeView: View {
             VStack(alignment: .leading, spacing: 20) {
                 // Header: logo + Home
                 HStack(spacing: 8) {
-                    Image(systemName: "paperplane.fill")
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundStyle(.primary)
+                    Image("logo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 24, height: 24)
                     Text("Home")
                         .opennoteMajorHeader()
                     Spacer()

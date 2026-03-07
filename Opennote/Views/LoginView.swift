@@ -14,9 +14,10 @@ struct LoginView: View {
         ScrollView {
             VStack(spacing: 24) {
                 // Logo
-                Image(systemName: "paperplane.fill")
-                    .font(.system(size: 48, weight: .medium))
-                    .foregroundStyle(.primary)
+                Image("logo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 48, height: 48)
                 
                 Text("Welcome to Opennote")
                     .opennoteMajorHeader()

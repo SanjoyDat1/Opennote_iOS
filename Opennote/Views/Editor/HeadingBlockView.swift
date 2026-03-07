@@ -7,6 +7,7 @@ struct HeadingBlockView: View {
     @FocusState.Binding var focusedBlockId: UUID?
     let onUpdate: (String) -> Void
     let onSubmit: () -> Void
+    var onSlashTriggered: ((UUID, String) -> Void)? = nil
 
     private var font: Font {
         switch level {
@@ -17,8 +18,28 @@ struct HeadingBlockView: View {
         }
     }
 
+    private var binding: Binding<String> {
+        Binding(
+            get: { text },
+            set: { newValue in
+                onUpdate(newValue)
+                let slashAtLineStart = newValue.hasPrefix("/") || newValue.contains("\n/")
+                if slashAtLineStart, let trigger = onSlashTriggered {
+                    let filter: String
+                    if let idx = newValue.lastIndex(of: "/") {
+                        let after = newValue.index(after: idx)
+                        filter = after < newValue.endIndex ? String(newValue[after...]) : ""
+                    } else {
+                        filter = ""
+                    }
+                    trigger(blockId, filter)
+                }
+            }
+        )
+    }
+
     var body: some View {
-        TextField("Heading", text: Binding(get: { text }, set: { onUpdate($0) }))
+        TextField("Heading", text: binding)
             .focused($focusedBlockId, equals: blockId)
             .onSubmit(onSubmit)
             .font(font)

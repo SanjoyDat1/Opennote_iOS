@@ -13,9 +13,10 @@ struct AppLoadView: View {
                 Spacer()
                 
                 HStack(spacing: 12) {
-                    Image(systemName: "paperplane")
-                        .font(.system(size: 36, weight: .light))
-                        .foregroundStyle(.primary)
+                    Image("logo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 36, height: 36)
                     Text("Opennote")
                         .font(.system(size: 28, weight: .bold, design: .serif))
                         .foregroundStyle(.primary)

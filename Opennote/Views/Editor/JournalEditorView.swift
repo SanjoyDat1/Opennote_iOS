@@ -211,7 +211,10 @@ struct JournalEditorView: View {
                                 insertFeynmanBlockAtFirst()
                             } label: {
                                 HStack(spacing: 10) {
-                                    Image(systemName: "paperplane.fill")
+                                    Image("logo")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 18, height: 18)
                                         .font(.system(size: 18, weight: .medium))
                                         .foregroundStyle(Color.opennoteGreen)
                                     Text("Ask Feynman")
@@ -228,18 +231,18 @@ struct JournalEditorView: View {
                             Button {
                                 showPhotoToText = true
                             } label: {
-                                HStack(spacing: 10) {
+                                HStack(spacing: 6) {
                                     Image(systemName: "camera.viewfinder")
-                                        .font(.system(size: 18, weight: .medium))
+                                        .font(.system(size: 14, weight: .medium))
                                         .foregroundStyle(Color.opennoteGreen)
                                     Text("Photo to Text")
-                                        .font(.system(size: 17, weight: .regular))
+                                        .font(.system(size: 14, weight: .regular))
                                         .foregroundStyle(Color.opennoteGreen)
                                 }
-                                .padding(.horizontal, 18)
-                                .padding(.vertical, 14)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 10)
                                 .background(Color.opennoteLightGreen)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
                             }
                             .buttonStyle(.plain)
 

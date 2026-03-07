@@ -6,6 +6,7 @@ struct SlashCommand: Identifiable {
     let title: String
     let subtitle: String?
     let icon: String
+    var assetImage: String? = nil
     let section: SlashCommandSection
 
     enum SlashCommandSection: String, CaseIterable {
@@ -38,7 +39,7 @@ extension SlashCommand {
         SlashCommand(id: "image", title: "Image", subtitle: nil, icon: "photo", section: .media),
         SlashCommand(id: "photo_to_text", title: "Photo to text", subtitle: "Notes & whiteboards → text", icon: "camera.viewfinder", section: .media),
         // AI
-        SlashCommand(id: "ask_feynman", title: "Ask Feynman", subtitle: "Ask anything", icon: "paperplane.fill", section: .ai),
+        SlashCommand(id: "ask_feynman", title: "Ask Feynman", subtitle: "Ask anything", icon: "paperplane.fill", assetImage: "logo", section: .ai),
         SlashCommand(id: "flashcards", title: "Make flashcards", subtitle: "AI generates from your notes", icon: "rectangle.stack.fill.badge.plus", section: .ai),
         SlashCommand(id: "practice", title: "Make practice problems", subtitle: "AI generates problems", icon: "questionmark.circle.fill", section: .ai),
         // Journals (placeholders for future)

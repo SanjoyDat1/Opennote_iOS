@@ -1,15 +1,19 @@
 import SwiftUI
-import PhotosUI
+import UIKit
 
-/// Sheet for picking a photo and extracting text with AI (notes, whiteboards).
+/// Sheet for taking a photo and extracting text with AI (notes, whiteboards).
 struct PhotoToTextView: View {
     @Binding var isPresented: Bool
     let onInsertText: (String) -> Void
 
-    @State private var selectedItem: PhotosPickerItem?
+    @State private var showCamera = false
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var extractedText: String?
+
+    private var isCameraAvailable: Bool {
+        UIImagePickerController.isSourceTypeAvailable(.camera)
+    }
 
     var body: some View {
         NavigationStack {
@@ -28,15 +32,18 @@ struct PhotoToTextView: View {
                 }
                 .padding(.top, 32)
 
-                PhotosPicker(
-                    selection: $selectedItem,
-                    matching: .images,
-                    photoLibrary: .shared()
-                ) {
+                Button {
+                    Haptics.impact(.light)
+                    if isCameraAvailable {
+                        showCamera = true
+                    } else {
+                        errorMessage = "Camera is not available. Use a device with a camera."
+                    }
+                } label: {
                     HStack(spacing: 10) {
-                        Image(systemName: "photo.on.rectangle.angled")
+                        Image(systemName: "camera.fill")
                             .font(.system(size: 20, weight: .medium))
-                        Text("Choose Photo")
+                        Text("Take Photo")
                             .font(.system(size: 17, weight: .semibold))
                     }
                     .foregroundStyle(.white)
@@ -46,10 +53,7 @@ struct PhotoToTextView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 14))
                 }
                 .buttonStyle(.plain)
-                .onChange(of: selectedItem) { _, newItem in
-                    guard let item = newItem else { return }
-                    Task { await extractText(from: item) }
-                }
+                .disabled(isLoading)
 
                 if isLoading {
                     VStack(spacing: 12) {
@@ -116,9 +120,17 @@ struct PhotoToTextView: View {
                 }
             }
         }
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraImagePicker { image in
+                showCamera = false
+                if let image {
+                    Task { await extractText(from: image) }
+                }
+            }
+        }
         .onChange(of: isPresented) { _, presented in
             if !presented {
-                selectedItem = nil
+                showCamera = false
                 isLoading = false
                 errorMessage = nil
                 extractedText = nil
@@ -126,14 +138,14 @@ struct PhotoToTextView: View {
         }
     }
 
-    private func extractText(from item: PhotosPickerItem) async {
+    private func extractText(from image: UIImage) async {
         isLoading = true
         errorMessage = nil
         extractedText = nil
 
-        guard let data = try? await item.loadTransferable(type: Data.self) else {
+        guard let data = image.jpegData(compressionQuality: 0.8) else {
             await MainActor.run {
-                errorMessage = "Could not load image."
+                errorMessage = "Could not process image."
                 isLoading = false
             }
             return
@@ -159,6 +171,43 @@ struct PhotoToTextView: View {
         await MainActor.run {
             extractedText = text
             isLoading = false
+        }
+    }
+}
+
+// MARK: - Camera Picker
+
+private struct CameraImagePicker: UIViewControllerRepresentable {
+    let onImageCaptured: (UIImage?) -> Void
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.delegate = context.coordinator
+        picker.allowsEditing = false
+        return picker
+    }
+
+    func updateUIViewController(_: UIImagePickerController, context _: Context) {}
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onImageCaptured: onImageCaptured)
+    }
+
+    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let onImageCaptured: (UIImage?) -> Void
+
+        init(onImageCaptured: @escaping (UIImage?) -> Void) {
+            self.onImageCaptured = onImageCaptured
+        }
+
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            let image = info[.originalImage] as? UIImage
+            onImageCaptured(image)
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            onImageCaptured(nil)
         }
     }
 }

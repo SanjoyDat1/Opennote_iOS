@@ -38,8 +38,10 @@ struct SplashView: View {
                     }
                     .padding(.trailing, 10)
                     
-                    Image(systemName: "paperplane.fill")
-                        .font(.system(size: 52, weight: .medium))
+                    Image("logo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 52, height: 52)
                         .foregroundStyle(Color.opennoteCreamDark)
                         .rotationEffect(.degrees(-42))
                         .offset(x: planeOffset)

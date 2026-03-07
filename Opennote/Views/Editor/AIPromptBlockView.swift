@@ -9,10 +9,22 @@ struct AIPromptBlockView: View {
     let onUpdate: (String) -> Void
     let onRun: () -> Void
     var onAddToNotes: ((String) -> Void)? = nil
+    var onClose: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
+                if let onClose {
+                    Button {
+                        Haptics.impact(.light)
+                        onClose()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
                 Image(systemName: "sparkles")
                     .font(.system(size: 18, weight: .medium))
                     .foregroundStyle(Color.opennoteGreen)
@@ -86,10 +98,27 @@ struct AIPromptBlockView: View {
 
     @ViewBuilder
     private func markdownText(_ raw: String) -> some View {
-        if let attributed = try? AttributedString(markdown: raw) {
+        let cleaned = Self.cleanAIOutput(raw)
+        if let attributed = try? AttributedString(markdown: cleaned, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
             Text(attributed)
         } else {
-            Text(raw)
+            Text(cleaned)
         }
+    }
+
+    /// Cleans AI output for proper display: decodes HTML entities, normalizes Unicode.
+    private static func cleanAIOutput(_ raw: String) -> String {
+        var result = raw
+        // Decode common HTML entities
+        let entities: [(String, String)] = [
+            ("&amp;", "&"), ("&lt;", "<"), ("&gt;", ">"), ("&quot;", "\""),
+            ("&apos;", "'"), ("&nbsp;", " "), ("&aacute;", "á"), ("&eacute;", "é"),
+            ("&iacute;", "í"), ("&oacute;", "ó"), ("&uacute;", "ú"), ("&ntilde;", "ñ"),
+            ("&Aacute;", "Á"), ("&Eacute;", "É"), ("&copy;", "©"), ("&reg;", "®")
+        ]
+        for (entity, replacement) in entities {
+            result = result.replacingOccurrences(of: entity, with: replacement)
+        }
+        return result
     }
 }

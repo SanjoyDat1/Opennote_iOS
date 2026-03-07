@@ -50,10 +50,18 @@ struct SlashCommandPaletteView: View {
                                         onSelect(cmd)
                                     } label: {
                                         HStack(spacing: 12) {
-                                            Image(systemName: cmd.icon)
-                                                .font(.system(size: 16, weight: .medium))
-                                                .foregroundStyle(cmd.section == .ai ? Color.opennoteGreen : .secondary)
-                                                .frame(width: 24, alignment: .center)
+                                            Group {
+                                                if let asset = cmd.assetImage {
+                                                    Image(asset)
+                                                        .resizable()
+                                                        .scaledToFit()
+                                                } else {
+                                                    Image(systemName: cmd.icon)
+                                                        .font(.system(size: 16, weight: .medium))
+                                                }
+                                            }
+                                            .foregroundStyle(cmd.section == .ai ? Color.opennoteGreen : .secondary)
+                                            .frame(width: 24, height: 24, alignment: .center)
 
                                             VStack(alignment: .leading, spacing: 2) {
                                                 Text(cmd.title)

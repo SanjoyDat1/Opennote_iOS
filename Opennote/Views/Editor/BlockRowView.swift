@@ -27,7 +27,8 @@ struct BlockRowView: View {
                     blockId: block.id,
                     focusedBlockId: $focusedBlockId,
                     onUpdate: { viewModel.updateBlock(id: block.id, blockType: .heading(level: level, text: $0)) },
-                    onSubmit: onReturnKey
+                    onSubmit: onReturnKey,
+                    onSlashTriggered: onSlashTriggered
                 )
 
             case .bulletList(let items):
@@ -72,6 +73,13 @@ struct BlockRowView: View {
                         let newBlock = NoteBlock(orderIndex: 0, blockType: .paragraph(text))
                         viewModel.insertBlock(after: block.id, newBlock: newBlock)
                         focusedBlockId = newBlock.id
+                    },
+                    onClose: {
+                        if viewModel.blocks.count > 1 {
+                            viewModel.deleteBlock(id: block.id)
+                        } else {
+                            viewModel.updateBlock(id: block.id, blockType: .paragraph(""))
+                        }
                     }
                 )
             case .graphBlock(let expression):

@@ -68,7 +68,7 @@ struct PaperSettingsSheet: View {
                             Button {
                                 onShowAI?()
                             } label: {
-                                settingsRow(icon: "paperplane.fill", title: "Ask Feynman", showChevron: false) { EmptyView() }
+                                settingsRow(icon: "paperplane.fill", title: "Ask Feynman", assetName: "logo", showChevron: false) { EmptyView() }
                             }
                             .buttonStyle(.plain)
                             Divider().padding(.leading, 48)
@@ -203,12 +203,20 @@ struct PaperSettingsSheet: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
-    private func settingsRow(icon: String, title: String, subtitle: String? = nil, showChevron: Bool = false, @ViewBuilder trailing: () -> some View) -> some View {
+    private func settingsRow(icon: String, title: String, subtitle: String? = nil, assetName: String? = nil, showChevron: Bool = false, @ViewBuilder trailing: () -> some View) -> some View {
         HStack(alignment: .center, spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 18))
-                .foregroundStyle(.secondary)
-                .frame(width: 24, alignment: .center)
+            Group {
+                if let asset = assetName {
+                    Image(asset)
+                        .resizable()
+                        .scaledToFit()
+                } else {
+                    Image(systemName: icon)
+                        .font(.system(size: 18))
+                }
+            }
+            .foregroundStyle(.secondary)
+            .frame(width: 24, height: 24, alignment: .center)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.system(size: 17))

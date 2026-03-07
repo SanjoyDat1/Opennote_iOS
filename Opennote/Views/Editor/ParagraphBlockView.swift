@@ -13,9 +13,17 @@ struct ParagraphBlockView: View {
             get: { text },
             set: { newValue in
                 onUpdate(newValue)
-                if newValue == "/" || newValue.hasPrefix("/") {
-                    let filter = newValue == "/" ? "" : String(newValue.dropFirst())
-                    onSlashTriggered?(blockId, filter)
+                // Trigger when "/" is at start of block or at start of a new line
+                let slashAtLineStart = newValue.hasPrefix("/") || newValue.contains("\n/")
+                if slashAtLineStart, let trigger = onSlashTriggered {
+                    let filter: String
+                    if let idx = newValue.lastIndex(of: "/") {
+                        let after = newValue.index(after: idx)
+                        filter = after < newValue.endIndex ? String(newValue[after...]) : ""
+                    } else {
+                        filter = ""
+                    }
+                    trigger(blockId, filter)
                 }
             }
         )

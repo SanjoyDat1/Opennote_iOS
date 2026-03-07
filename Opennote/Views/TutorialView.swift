@@ -7,6 +7,7 @@ struct TutorialView: View {
     private let pages: [TutorialPage] = [
         TutorialPage(
             icon: "paperplane.fill",
+            customImage: "logo",
             iconColor: Color.opennoteCreamDark,  // Cream, not green
             title: "The notebook that thinks with you",
             body: "Opennote combines smart note-taking with AI-powered learning. Capture ideas, then deepen your understanding."
@@ -100,6 +101,7 @@ struct TutorialView: View {
 
 struct TutorialPage {
     let icon: String
+    var customImage: String? = nil
     let iconColor: Color
     let title: String
     let body: String
@@ -113,11 +115,20 @@ private struct TutorialPageView: View {
         VStack(spacing: 32) {
             Spacer()
             
-            Image(systemName: page.icon)
-                .font(.system(size: 64, weight: .medium))
-                .foregroundStyle(page.iconColor)
-                .scaleEffect(appeared ? 1 : 0.8)
-                .opacity(appeared ? 1 : 0)
+            Group {
+                if let custom = page.customImage {
+                    Image(custom)
+                        .resizable()
+                        .scaledToFit()
+                } else {
+                    Image(systemName: page.icon)
+                        .font(.system(size: 64, weight: .medium))
+                        .foregroundStyle(page.iconColor)
+                }
+            }
+            .frame(width: 64, height: 64)
+            .scaleEffect(appeared ? 1 : 0.8)
+            .opacity(appeared ? 1 : 0)
             
             VStack(spacing: 12) {
                 Text(page.title)

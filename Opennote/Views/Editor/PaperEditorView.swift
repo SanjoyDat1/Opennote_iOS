@@ -178,8 +178,10 @@ struct PaperEditorView: View {
                 Haptics.impact(.light)
                 showAISheet = true
             } label: {
-                Image(systemName: "paperplane.fill")
-                    .font(.system(size: 22, weight: .medium))
+                Image("logo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 22, height: 22)
                     .foregroundStyle(.white)
                     .frame(width: 56, height: 56)
                     .background(Color.opennoteGreen)
@@ -376,8 +378,10 @@ private struct PaperAISheet: View {
                 VStack(alignment: .leading, spacing: 24) {
                     // Header
                     HStack(spacing: 12) {
-                        Image(systemName: "paperplane.fill")
-                            .font(.system(size: 28, weight: .medium))
+                        Image("logo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 28, height: 28)
                             .foregroundStyle(Color.opennoteGreen)
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Ask Feynman")
@@ -497,8 +501,10 @@ private struct PaperAISheet: View {
                                 if isRunning {
                                     ProgressView().tint(.white)
                                 } else {
-                                    Image(systemName: "paperplane.fill")
-                                        .font(.system(size: 18, weight: .medium))
+                                    Image("logo")
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 18, height: 18)
                                     Text("Ask Feynman")
                                         .font(.system(size: 16, weight: .semibold))
                                 }
