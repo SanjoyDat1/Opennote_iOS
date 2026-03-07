@@ -4,7 +4,4 @@
    <FileRef
       location = "group:Opennote.xcodeproj">
    </FileRef>
-   <FileRef
-      location = "group:OpenNoteClinical.xcodeproj">
-   </FileRef>
 </Workspace>

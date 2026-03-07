@@ -8,6 +8,7 @@ struct AIPromptBlockView: View {
     @FocusState.Binding var focusedBlockId: UUID?
     let onUpdate: (String) -> Void
     let onRun: () -> Void
+    var onAddToNotes: ((String) -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -38,21 +39,47 @@ struct AIPromptBlockView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
 
             if let response, !response.isEmpty {
-                ScrollView {
-                    markdownText(response)
-                        .font(.system(size: 17, design: .default))
-                        .foregroundStyle(.primary)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(16)
+                VStack(alignment: .leading, spacing: 12) {
+                    ScrollView {
+                        markdownText(response)
+                            .font(.system(size: 17, design: .default))
+                            .foregroundStyle(.primary)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(16)
+                    }
+                    .frame(maxHeight: 600)
+                    .background(Color(.systemGray6).opacity(0.5))
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.opennoteGreen.opacity(0.3), lineWidth: 1)
+                    )
+
+                    HStack(spacing: 12) {
+                        Button {
+                            onRun()
+                        } label: {
+                            Label("Refresh", systemImage: "arrow.clockwise")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(Color.opennoteGreen)
+                        }
+                        .disabled(isRunning)
+
+                        Button {
+                            onAddToNotes?(response)
+                        } label: {
+                            Label("Add to notes", systemImage: "plus.circle.fill")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+                                .background(Color.opennoteGreen)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                        }
+                        .disabled(isRunning)
+                    }
                 }
-                .frame(maxHeight: 600)
-                .background(Color(.systemGray6).opacity(0.5))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.opennoteGreen.opacity(0.3), lineWidth: 1)
-                )
             }
         }
     }

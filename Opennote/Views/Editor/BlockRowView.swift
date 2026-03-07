@@ -67,7 +67,12 @@ struct BlockRowView: View {
                     isRunning: viewModel.runningAIBlockId == block.id,
                     focusedBlockId: $focusedBlockId,
                     onUpdate: { viewModel.updateBlock(id: block.id, blockType: .aiPrompt(command: $0, response: response)) },
-                    onRun: { Task { await runFeynman(blockId: block.id) } }
+                    onRun: { Task { await runFeynman(blockId: block.id) } },
+                    onAddToNotes: { text in
+                        let newBlock = NoteBlock(orderIndex: 0, blockType: .paragraph(text))
+                        viewModel.insertBlock(after: block.id, newBlock: newBlock)
+                        focusedBlockId = newBlock.id
+                    }
                 )
             case .graphBlock(let expression):
                 GraphBlockView(

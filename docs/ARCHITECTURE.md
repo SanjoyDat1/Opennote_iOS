@@ -7,7 +7,7 @@ This document describes the internal architecture of the OpenNote app and docume
 ## Project Structure
 
 ```
-OpenNoteMVP/
+Opennote_iOS/
 ├── Opennote/                         # Main app target
 │   ├── App/
 │   │   └── OpennoteApp.swift
@@ -72,7 +72,6 @@ OpenNoteMVP/
 │       │   └── SettingsComponents.swift
 │       └── Upgrade/
 │           └── UpgradeSheet.swift
-├── OpenNoteClinical/                 # Separate clinical variant (Supabase, RAG)
 └── docs/
     └── ARCHITECTURE.md
 ```

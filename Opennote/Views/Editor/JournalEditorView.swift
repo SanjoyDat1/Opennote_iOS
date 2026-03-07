@@ -196,9 +196,15 @@ struct JournalEditorView: View {
                     VStack(alignment: .leading, spacing: 20) {
                     // "Start with" - Ask Feynman only (no Generate video)
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Start with")
-                            .font(.system(size: 14, weight: .regular))
-                            .foregroundStyle(.secondary)
+                        HStack {
+                            Text("Start with")
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("Type / on a new line for commands")
+                                .font(.system(size: 12, weight: .regular))
+                                .foregroundStyle(.tertiary)
+                        }
 
                         HStack(spacing: 10) {
                             Button {

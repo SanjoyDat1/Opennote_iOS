@@ -182,7 +182,7 @@ final class JournalEditorViewModel {
         }
     }
 
-    /// Run Feynman AI on an AI prompt block. Streams response into a new paragraph block below.
+    /// Run Feynman AI on an AI prompt block. Streams response into the block's output area only.
     @MainActor
     func runAIBlock(blockId: UUID) async {
         guard let idx = blocks.firstIndex(where: { $0.id == blockId }) else { return }
@@ -193,12 +193,11 @@ final class JournalEditorViewModel {
         runningAIBlockId = blockId
         defer { runningAIBlockId = nil }
 
-        let newParagraphId = insertParagraph(after: blockId)
         var streamedContent = ""
 
         let openAI = OpenAIService.shared
         guard openAI.isConfigured else {
-            updateBlock(id: newParagraphId, blockType: .paragraph("Add your OpenAI API key in OpenAIConfig.swift to use Feynman."))
+            updateBlock(id: blockId, blockType: .aiPrompt(command: command, response: "Add your OpenAI API key in OpenAIConfig.swift to use Feynman."))
             return
         }
 
@@ -207,11 +206,10 @@ final class JournalEditorViewModel {
         do {
             for try await delta in openAI.streamChat(messages: messages, systemContext: blocksToMarkdown()) {
                 streamedContent += delta
-                updateBlock(id: newParagraphId, blockType: .paragraph(streamedContent))
+                updateBlock(id: blockId, blockType: .aiPrompt(command: command, response: streamedContent))
             }
-            updateBlock(id: blockId, blockType: .aiPrompt(command: command, response: streamedContent))
         } catch {
-            updateBlock(id: newParagraphId, blockType: .paragraph("Error: \(error.localizedDescription)"))
+            updateBlock(id: blockId, blockType: .aiPrompt(command: command, response: "Error: \(error.localizedDescription)"))
         }
     }
 

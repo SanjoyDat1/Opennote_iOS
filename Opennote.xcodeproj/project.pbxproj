@@ -82,6 +82,7 @@
 		B2000118 /* CodeCardBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodeCardBlockView.swift; sourceTree = "<group>"; };
 		B2000119 /* AIPromptBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIPromptBlockView.swift; sourceTree = "<group>"; };
 		B200011A /* OpenAIConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIConfig.swift; sourceTree = "<group>"; };
+		B2000136 /* OpenAIConfig.example.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIConfig.example.swift; sourceTree = "<group>"; };
 		B200011B /* OpenAIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIService.swift; sourceTree = "<group>"; };
 		B200011C /* PaperEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PaperEditorView.swift; sourceTree = "<group>"; };
 		B200011D /* TutorialView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialView.swift; sourceTree = "<group>"; };
@@ -113,6 +114,25 @@
 		};
 /* End PBXFrameworksBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		B20000F2 /* Copy OpenAIConfig if missing */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"${SRCROOT}/Opennote/Config/OpenAIConfig.example.swift",
+			);
+			name = "Copy OpenAIConfig if missing";
+			outputPaths = (
+				"${SRCROOT}/Opennote/Config/OpenAIConfig.swift",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ ! -f \"${SRCROOT}/Opennote/Config/OpenAIConfig.swift\" ]; then\n  cp \"${SRCROOT}/Opennote/Config/OpenAIConfig.example.swift\" \"${SRCROOT}/Opennote/Config/OpenAIConfig.swift\"\n  echo \"Created OpenAIConfig.swift from example. Add your API key before using AI features.\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXGroup section */
 		B20000F1 = {
 			isa = PBXGroup;
@@ -141,6 +161,7 @@
 			isa = PBXGroup;
 			children = (
 				B200011A /* OpenAIConfig.swift */,
+				B2000136 /* OpenAIConfig.example.swift */,
 			);
 			path = Config;
 			sourceTree = "<group>";
@@ -269,6 +290,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = B20000E2 /* Build configuration list for PBXNativeTarget "Opennote" */;
 			buildPhases = (
+				B20000F2 /* Copy OpenAIConfig if missing */,
 				B20000E3 /* Sources */,
 				B20000E0 /* Frameworks */,
 				B20000E4 /* Resources */,

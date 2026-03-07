@@ -46,13 +46,13 @@ OpenNote is an AI-first note-taking app for iOS that combines rich block-based j
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/<your-username>/OpenNoteMVP.git
-cd OpenNoteMVP
+git clone https://github.com/SanjoyDat1/Opennote_iOS.git
+cd Opennote_iOS
 ```
 
 ### 2. Open the project
 
-Open `OpenNoteMVP.xcodeproj` in Xcode. The main app target is **Opennote**.
+Open `OpenNoteMVP.xcworkspace` or `Opennote.xcodeproj` in Xcode. The main app target is **Opennote**.
 
 ### 3. Configure OpenAI (for AI features)
 
@@ -74,7 +74,7 @@ Select the **Opennote** scheme, choose a simulator or device, and run (⌘R).
 ## Project Structure
 
 ```
-OpenNoteMVP/
+Opennote_iOS/
 ├── Opennote/                 # Main app
 │   ├── App/                  # App entry point
 │   ├── Config/               # API keys, configuration
@@ -88,7 +88,6 @@ OpenNoteMVP/
 │       ├── Inbox/
 │       ├── Sidebar/
 │       └── Upgrade/
-├── OpenNoteClinical/         # Clinical variant (Supabase, RAG)
 ├── docs/
 │   └── ARCHITECTURE.md       # Internal architecture
 └── README.md
