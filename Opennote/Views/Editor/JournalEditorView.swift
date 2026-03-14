@@ -567,31 +567,110 @@ struct JournalEditorView: View {
         }
     }
 
-    /// Inserts the full Feynman response into the journal.
-    /// Splits on double-newlines so each paragraph becomes its own block,
-    /// avoiding any UITextView newline-interception edge cases.
+    /// Inserts the full Feynman response into the journal by parsing markdown
+    /// into proper block types (headings, code, dividers, paragraphs — no lists).
     private func insertTextFromChat(_ text: String) {
         isChatInputFocused = false
-        // Always anchor to the very last block so content appends at the bottom
         guard var anchorId = viewModel.blocks.last?.id else { return }
 
-        // Split into paragraphs; fall back to the whole text as one block
-        let paragraphs = text
-            .components(separatedBy: "\n\n")
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-        let chunks = paragraphs.isEmpty ? [text] : paragraphs
-
-        for chunk in chunks {
-            let block = NoteBlock(orderIndex: 0, blockType: .paragraph(chunk))
+        let blocks = markdownToBlocks(text)
+        for block in blocks {
             viewModel.insertBlock(after: anchorId, newBlock: block)
             anchorId = block.id
         }
-        // Scroll to the last inserted block without stealing the keyboard
         let lastId = anchorId
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             focusedBlockId = lastId
         }
+    }
+
+    /// Converts a markdown string (typical LLM output) into an ordered array of NoteBlocks.
+    /// Supported: headings (h1–h3), fenced code blocks, dividers, and paragraphs.
+    /// Lists are intentionally rendered as plain paragraphs (better visual consistency).
+    private func markdownToBlocks(_ raw: String) -> [NoteBlock] {
+        var result: [NoteBlock] = []
+        let lines = raw.components(separatedBy: "\n")
+        var i = 0
+
+        while i < lines.count {
+            let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
+
+            // — blank line: skip
+            if trimmed.isEmpty {
+                i += 1; continue
+            }
+
+            // — fenced code block ```lang … ```
+            if trimmed.hasPrefix("```") {
+                let lang = String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)
+                var codeLines: [String] = []
+                i += 1
+                while i < lines.count {
+                    let cl = lines[i]
+                    if cl.trimmingCharacters(in: .whitespaces).hasPrefix("```") { i += 1; break }
+                    codeLines.append(cl); i += 1
+                }
+                let language = lang.isEmpty ? "Code" : lang.capitalized
+                result.append(NoteBlock(orderIndex: 0, blockType: .codeCard(
+                    language: language,
+                    code: codeLines.joined(separator: "\n"),
+                    stdin: "", stdout: ""
+                )))
+                continue
+            }
+
+            // — horizontal rule
+            if trimmed == "---" || trimmed == "***" || trimmed == "___" {
+                result.append(NoteBlock(orderIndex: 0, blockType: .divider))
+                i += 1; continue
+            }
+
+            // — headings (### ## #)
+            if trimmed.hasPrefix("### ") {
+                result.append(NoteBlock(orderIndex: 0, blockType: .heading(level: 3, text: stripInline(String(trimmed.dropFirst(4))))))
+                i += 1; continue
+            }
+            if trimmed.hasPrefix("## ") {
+                result.append(NoteBlock(orderIndex: 0, blockType: .heading(level: 2, text: stripInline(String(trimmed.dropFirst(3))))))
+                i += 1; continue
+            }
+            if trimmed.hasPrefix("# ") {
+                result.append(NoteBlock(orderIndex: 0, blockType: .heading(level: 1, text: stripInline(String(trimmed.dropFirst(2))))))
+                i += 1; continue
+            }
+
+            // — strip list markers (-, *, •, 1.) and render as plain paragraphs
+            var content = trimmed
+            if content.hasPrefix("- ") || content.hasPrefix("* ") || content.hasPrefix("• ") {
+                content = String(content.dropFirst(2))
+            } else {
+                let numPattern = #"^(\d+)\.\s+"#
+                content = content.replacingOccurrences(of: numPattern, with: "", options: .regularExpression)
+            }
+            let cleaned = stripInline(content)
+            if !cleaned.isEmpty {
+                result.append(NoteBlock(orderIndex: 0, blockType: .paragraph(cleaned)))
+            }
+            i += 1
+        }
+
+        return result.isEmpty ? [NoteBlock(orderIndex: 0, blockType: .paragraph(raw))] : result
+    }
+
+    /// Strips common inline markdown (bold, italic, inline-code, links) leaving clean plain text.
+    private func stripInline(_ text: String) -> String {
+        var s = text
+        // bold: **…** or __…__
+        s = s.replacingOccurrences(of: #"\*\*(.+?)\*\*"#, with: "$1", options: .regularExpression)
+        s = s.replacingOccurrences(of: #"__(.+?)__"#,     with: "$1", options: .regularExpression)
+        // italic: *…* or _…_  (after bold so ** is already gone)
+        s = s.replacingOccurrences(of: #"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)"#, with: "$1", options: .regularExpression)
+        s = s.replacingOccurrences(of: #"(?<!_)_(?!_)(.+?)(?<!_)_(?!_)"#,     with: "$1", options: .regularExpression)
+        // inline code: `…`
+        s = s.replacingOccurrences(of: #"`([^`]+)`"#, with: "$1", options: .regularExpression)
+        // links: [label](url)
+        s = s.replacingOccurrences(of: #"\[([^\]]+)\]\([^)]+\)"#, with: "$1", options: .regularExpression)
+        return s.trimmingCharacters(in: .whitespaces)
     }
 }
 

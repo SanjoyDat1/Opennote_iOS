@@ -69,14 +69,13 @@ struct ParagraphTextView: UIViewRepresentable {
         textView.isSelectable = true
         if textView.text != text {
             textView.text = text
+            // Tell SwiftUI the intrinsic size changed so it re-queries sizeThatFits
+            textView.invalidateIntrinsicContentSize()
         }
         let desired = resolvedFont()
         if textView.font != desired {
             textView.font = desired
-        }
-        let maxWidth = UIScreen.main.bounds.width - 32
-        if textView.frame.width != maxWidth {
-            textView.frame.size.width = maxWidth
+            textView.invalidateIntrinsicContentSize()
         }
         context.coordinator.parent = self
         context.coordinator.placeholder = placeholder
@@ -96,6 +95,13 @@ struct ParagraphTextView: UIViewRepresentable {
         }
     }
 
+    /// Let SwiftUI own the width; compute the natural word-wrapped height.
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
+        let width = proposal.width ?? (UIScreen.main.bounds.width - 40)
+        let fitted = uiView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        return CGSize(width: width, height: max(fitted.height, 40))
+    }
+
     class Coordinator: NSObject, UITextViewDelegate {
         var parent: ParagraphTextView  // Updated in updateUIView so onFocusChange uses latest closure
         var placeholder: String
@@ -107,6 +113,7 @@ struct ParagraphTextView: UIViewRepresentable {
 
         func textViewDidChange(_ textView: UITextView) {
             parent.text = textView.text
+            textView.invalidateIntrinsicContentSize()
 
             scrollToCursor(in: textView)
             checkSlashTrigger(in: textView)
@@ -123,19 +130,11 @@ struct ParagraphTextView: UIViewRepresentable {
         }
 
         func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
-            // Backspace on an already-empty field → delete block and move up
-            if text.isEmpty {
-                if textView.text.isEmpty {
-                    parent.onBecameEmpty?()
-                    return false
-                }
-                if range.length > 0 {
-                    let newText = (textView.text as NSString).replacingCharacters(in: range, with: "")
-                    if newText.isEmpty, parent.onBecameEmpty != nil {
-                        parent.onBecameEmpty?()
-                        return false
-                    }
-                }
+            // Only jump to the previous block when the field is ALREADY empty before the backspace.
+            // Deleting the last character should leave an empty line — NOT jump up.
+            if text.isEmpty && textView.text.isEmpty {
+                parent.onBecameEmpty?()
+                return false
             }
 
             guard text == "\n" else { return true }
