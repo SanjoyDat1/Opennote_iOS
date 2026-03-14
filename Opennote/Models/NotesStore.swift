@@ -40,6 +40,7 @@ final class NotesStore {
     
     func deleteJournal(id: String) {
         journals.removeAll { $0.id == id }
+        deleteBlocks(forJournalId: id)
         save()
     }
     
@@ -48,6 +49,39 @@ final class NotesStore {
         save()
     }
     
+    // MARK: - Block persistence (one JSON file per journal in Application Support)
+
+    private var blocksDirectory: URL {
+        FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("opennote/blocks", isDirectory: true)
+    }
+
+    private func blocksURL(for journalId: String) -> URL {
+        blocksDirectory.appendingPathComponent("\(journalId).json")
+    }
+
+    /// Writes the full block array for a journal to disk atomically.
+    func saveBlocks(_ blocks: [NoteBlock], forJournalId id: String) {
+        let dir = blocksDirectory
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        guard let data = try? JSONEncoder().encode(blocks) else { return }
+        try? data.write(to: blocksURL(for: id), options: .atomic)
+    }
+
+    /// Reads the saved block array for a journal. Returns nil if not yet persisted.
+    func loadBlocks(forJournalId id: String) -> [NoteBlock]? {
+        guard let data = try? Data(contentsOf: blocksURL(for: id)) else { return nil }
+        return try? JSONDecoder().decode([NoteBlock].self, from: data)
+    }
+
+    /// Removes the block file when a journal is deleted.
+    func deleteBlocks(forJournalId id: String) {
+        try? FileManager.default.removeItem(at: blocksURL(for: id))
+    }
+
+    // MARK: - Metadata persistence
+
     private func save() {
         if let data = try? JSONEncoder().encode(journals.map { JournalDTO.from($0) }) {
             UserDefaults.standard.set(data, forKey: journalsKey)

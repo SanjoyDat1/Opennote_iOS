@@ -49,9 +49,11 @@ struct MainContainerView: View {
                 .navigationDestination(item: $selectedJournal) { journal in
                     JournalEditorView(
                         journal: journal,
-                        initialBlocks: notesStore.pendingBlocksForJournalId[journal.id],
+                        // Prefer clone-paste blocks; fall back to persisted blocks from disk
+                        initialBlocks: notesStore.pendingBlocksForJournalId[journal.id]
+                                    ?? notesStore.loadBlocks(forJournalId: journal.id),
                         onDelete: {
-                            notesStore.deleteJournal(id: journal.id)
+                            notesStore.deleteJournal(id: journal.id) // also deletes block file
                             selectedJournal = nil
                         },
                         onCloneSelect: { newJournal in

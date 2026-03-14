@@ -10,6 +10,8 @@ struct JournalEditorView: View {
     @State private var focusedBlockId: UUID?
     /// True during the brief window of a block deletion so the scroll doesn't animate.
     @State private var suppressNextScrollAnimation = false
+    /// Debounced save task — cancelled and rescheduled on every block change.
+    @State private var pendingSaveTask: Task<Void, Never>?
     @State private var isKeyboardVisible = false
     @State private var viewModel: JournalEditorViewModel
     @State private var showSettingsSheet = false
@@ -182,6 +184,11 @@ struct JournalEditorView: View {
                !viewModel.blocks.contains(where: { $0.id == bid }) {
                 withAnimation(.easeOut(duration: 0.18)) { showSlashPalette = false }
             }
+            scheduleSave()
+        }
+        .onDisappear {
+            // Guaranteed final save — cancels any pending debounce and writes immediately
+            saveNow()
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
             isKeyboardVisible = true
@@ -708,6 +715,32 @@ struct JournalEditorView: View {
         // links: [label](url)
         s = s.replacingOccurrences(of: #"\[([^\]]+)\]\([^)]+\)"#, with: "$1", options: .regularExpression)
         return s.trimmingCharacters(in: .whitespaces)
+    }
+
+    // MARK: - Persistence
+
+    /// Debounced save: waits 0.8 s after the last keystroke before hitting disk.
+    /// Any rapid edits collapse into a single write, protecting battery & I/O.
+    private func scheduleSave() {
+        pendingSaveTask?.cancel()
+        pendingSaveTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 800_000_000)
+            guard !Task.isCancelled else { return }
+            // Write blocks only during typing; metadata is updated on exit
+            notesStore.saveBlocks(viewModel.blocks, forJournalId: journal.id)
+        }
+    }
+
+    /// Immediate synchronous save — called on onDisappear so no data is lost on navigation.
+    private func saveNow() {
+        pendingSaveTask?.cancel()
+        pendingSaveTask = nil
+        notesStore.saveBlocks(viewModel.blocks, forJournalId: journal.id)
+        // Stamp the lastEdited time so home-screen sorting/display stays accurate
+        if var updated = notesStore.journals.first(where: { $0.id == journal.id }) {
+            updated.lastEdited = Date()
+            notesStore.updateJournal(updated)
+        }
     }
 }
 
