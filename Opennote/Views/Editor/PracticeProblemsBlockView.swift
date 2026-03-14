@@ -3,7 +3,7 @@ import SwiftUI
 struct PracticeProblemsBlockView: View {
     let items: [PracticeProblemItem]
     let blockId: UUID
-    @FocusState.Binding var focusedBlockId: UUID?
+    @Binding var focusedBlockId: UUID?
     let onUpdate: ([PracticeProblemItem]) -> Void
     let onGenerate: () -> Void
     var isGenerating: Bool = false

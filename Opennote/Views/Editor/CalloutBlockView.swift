@@ -3,8 +3,10 @@ import SwiftUI
 struct CalloutBlockView: View {
     let text: String
     let blockId: UUID
-    @FocusState.Binding var focusedBlockId: UUID?
+    @Binding var focusedBlockId: UUID?
     let onUpdate: (String) -> Void
+
+    @FocusState private var isEditorFocused: Bool
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -12,8 +14,12 @@ struct CalloutBlockView: View {
                 .font(.system(size: 20))
                 .foregroundStyle(Color.opennoteGreen)
             TextEditor(text: Binding(get: { text }, set: { onUpdate($0) }))
-                .focused($focusedBlockId, equals: blockId)
+                .focused($isEditorFocused)
                 .font(.system(size: 16))
+                .onChange(of: isEditorFocused) { _, focused in
+                    if focused { focusedBlockId = blockId }
+                    else if focusedBlockId == blockId { focusedBlockId = nil }
+                }
                 .scrollContentBackground(.hidden)
                 .frame(minHeight: 32)
         }

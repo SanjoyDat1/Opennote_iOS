@@ -4,9 +4,11 @@ import SwiftUI
 struct GraphBlockView: View {
     let expression: String
     let blockId: UUID
-    @FocusState.Binding var focusedBlockId: UUID?
+    @Binding var focusedBlockId: UUID?
     let onUpdate: (String) -> Void
-    
+
+    @FocusState private var isFieldFocused: Bool
+
     private var desmosURL: URL? {
         URL(string: "https://www.desmos.com/calculator")
     }
@@ -18,8 +20,12 @@ struct GraphBlockView: View {
                     .font(.system(size: 18, weight: .medium))
                     .foregroundStyle(Color.opennoteGreen)
                 TextField("e.g. y=x^2 or sin(x)", text: Binding(get: { expression }, set: { onUpdate($0) }))
-                    .focused($focusedBlockId, equals: blockId)
+                    .focused($isFieldFocused)
                     .font(.system(.body, design: .default))
+                    .onChange(of: isFieldFocused) { _, focused in
+                        if focused { focusedBlockId = blockId }
+                        else if focusedBlockId == blockId { focusedBlockId = nil }
+                    }
             }
             .padding(12)
             .background(Color.opennoteLightGreen)

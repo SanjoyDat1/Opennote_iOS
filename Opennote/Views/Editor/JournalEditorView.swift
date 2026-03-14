@@ -7,7 +7,8 @@ struct JournalEditorView: View {
     var onCloneSelect: ((Journal) -> Void)?
     @Environment(\.dismiss) private var dismiss
     @Environment(NotesStore.self) private var notesStore
-    @FocusState private var focusedBlockId: UUID?
+    @State private var focusedBlockId: UUID?
+    @State private var isKeyboardVisible = false
     @State private var viewModel: JournalEditorViewModel
     @State private var showSettingsSheet = false
     @State private var showSlashPalette = false
@@ -24,9 +25,11 @@ struct JournalEditorView: View {
     @State private var speechService = SpeechToTextService()
     // Feynman chat — persistent per journal session, shown inline above the input bar
     @State private var feynmanConversation = FeynmanConversationViewModel()
-    // Voice note — insert transcription into journal (separate from chat bar mic)
+    // Voice note — live dictation directly into a journal block
     @State private var showVoiceForJournal = false
     @State private var voiceInsertAnchorId: UUID?
+    @State private var journalSpeechService = SpeechToTextService()
+    @State private var voiceLiveBlockId: UUID?
 
     init(journal: Journal, initialBlocks: [NoteBlock]? = nil, onDelete: (() -> Void)? = nil, onCloneSelect: ((Journal) -> Void)? = nil) {
         self.journal = journal
@@ -108,19 +111,34 @@ struct JournalEditorView: View {
         }
         .sheet(isPresented: $showVoiceForJournal) {
             VoiceInputSheet(
-                service: SpeechToTextService(),
+                service: journalSpeechService,
                 insertIntoPrompt: false,
-                onInsert: { text in
-                    showVoiceForJournal = false
-                    let anchorId = voiceInsertAnchorId ?? viewModel.blocks.last?.id
-                    guard let id = anchorId else { return }
-                    let newBlock = NoteBlock(orderIndex: 0, blockType: .paragraph(text))
-                    viewModel.insertBlock(after: id, newBlock: newBlock)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        focusedBlockId = newBlock.id
+                onLiveUpdate: { newText in
+                    // Stream partial results directly into the live paragraph block
+                    if let id = voiceLiveBlockId {
+                        viewModel.updateBlock(id: id, blockType: .paragraph(newText))
                     }
                 },
-                onDismiss: { showVoiceForJournal = false }
+                onInsert: { _ in
+                    // Text is already live in the journal block — just tidy up
+                    showVoiceForJournal = false
+                    if let id = voiceLiveBlockId {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            focusedBlockId = id
+                        }
+                    }
+                    voiceLiveBlockId = nil
+                    journalSpeechService.reset()
+                },
+                onDismiss: {
+                    // Cancel — remove the live block if it exists
+                    showVoiceForJournal = false
+                    if let id = voiceLiveBlockId {
+                        viewModel.deleteBlock(id: id)
+                    }
+                    voiceLiveBlockId = nil
+                    journalSpeechService.reset()
+                }
             )
         }
         .sheet(isPresented: $showInsertFromJournalSheet) {
@@ -145,7 +163,7 @@ struct JournalEditorView: View {
                 viewModel: chatBarViewModel,
                 conversation: feynmanConversation,
                 isFocused: $isChatInputFocused,
-                isNoteFocused: focusedBlockId != nil,
+                isNoteFocused: isKeyboardVisible && !isChatInputFocused,
                 journalContext: viewModel.blocksToMarkdown(),
                 onPlus: { showFeynmanPlusSheet = true },
                 onInsertIntoJournal: { text in insertTextFromChat(text) },
@@ -162,6 +180,12 @@ struct JournalEditorView: View {
                !viewModel.blocks.contains(where: { $0.id == bid }) {
                 withAnimation(.easeOut(duration: 0.18)) { showSlashPalette = false }
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            isKeyboardVisible = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            isKeyboardVisible = false
         }
     }
 
@@ -221,10 +245,7 @@ struct JournalEditorView: View {
             showPhotoToTextFlowSheet = true
 
         case "voice_note":
-            voiceInsertAnchorId = blockId
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                showVoiceForJournal = true
-            }
+            startJournalVoiceDictation(anchorId: blockId)
 
         case "ask_feynman":
             // Focus the inline chat input bar
@@ -312,91 +333,82 @@ struct JournalEditorView: View {
         .background(Color.opennoteCream)
     }
 
+    // MARK: "Start with" quick-action bar
+
+    private var startWithBar: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Start with")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("Type / for commands")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.tertiary)
+            }
+
+            HStack(spacing: 12) {
+                // ── + All commands (slash palette) ────────────────
+                Button {
+                    Haptics.impact(.light)
+                    slashBlockId = viewModel.blocks.first?.id
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showSlashPalette = true
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(Color.opennoteGreen)
+                        .frame(width: 48, height: 48)
+                        .background(Color.opennoteLightGreen.opacity(0.65))
+                        .clipShape(RoundedRectangle(cornerRadius: 13))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 13)
+                                .stroke(Color.opennoteGreen.opacity(0.25), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                // ── Camera — scan notes ───────────────────────────
+                Button {
+                    Haptics.impact(.light)
+                    showPhotoToTextFlowSheet = true
+                } label: {
+                    Image(systemName: "camera.viewfinder")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(Color(.systemGray))
+                        .frame(width: 48, height: 48)
+                        .background(Color(.systemGray6))
+                        .clipShape(RoundedRectangle(cornerRadius: 13))
+                }
+                .buttonStyle(.plain)
+
+                // ── Mic — voice note ──────────────────────────────
+                Button {
+                    Haptics.impact(.light)
+                    startJournalVoiceDictation(anchorId: viewModel.blocks.last?.id)
+                } label: {
+                    Image(systemName: "mic.fill")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(Color(.systemGray))
+                        .frame(width: 48, height: 48)
+                        .background(Color(.systemGray6))
+                        .clipShape(RoundedRectangle(cornerRadius: 13))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
     private var editorContent: some View {
         ZStack(alignment: .topLeading) {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
                     if viewModel.blocks.count == 1, isBlockEmpty(viewModel.blocks[0]) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            Text("Start with")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Text("Type / for commands")
-                                .font(.system(size: 12, weight: .regular))
-                                .foregroundStyle(.tertiary)
-                        }
-
-                        HStack(spacing: 10) {
-                            // ── Scan notes — hero action ──────────────────
-                            Button {
-                                Haptics.impact(.light)
-                                showPhotoToTextFlowSheet = true
-                            } label: {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "camera.viewfinder")
-                                        .font(.system(size: 17, weight: .medium))
-                                        .foregroundStyle(Color.opennoteGreen)
-                                    VStack(alignment: .leading, spacing: 1) {
-                                        Text("Scan Notes")
-                                            .font(.system(size: 15, weight: .semibold))
-                                            .foregroundStyle(Color.opennoteGreen)
-                                        Text("Photo → text")
-                                            .font(.system(size: 11, weight: .regular))
-                                            .foregroundStyle(Color.opennoteGreen.opacity(0.7))
-                                    }
-                                }
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 12)
-                                .background(Color.opennoteLightGreen)
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(Color.opennoteGreen.opacity(0.22), lineWidth: 1)
-                                )
-                            }
-                            .buttonStyle(.plain)
-
-                            // ── Block-type quick insert menu ──────────────
-                            Menu {
-                                Button("Heading 1") { insertBlockType(.heading(level: 1, text: ""), at: focusedBlockId ?? viewModel.blocks.first?.id) }
-                                Button("Heading 2") { insertBlockType(.heading(level: 2, text: ""), at: focusedBlockId ?? viewModel.blocks.first?.id) }
-                                Button("Heading 3") { insertBlockType(.heading(level: 3, text: ""), at: focusedBlockId ?? viewModel.blocks.first?.id) }
-                                Button("Bullet List") { insertBlockType(.bulletList([""]), at: focusedBlockId ?? viewModel.blocks.first?.id) }
-                                Button("Numbered List") { insertBlockType(.numberedList([""]), at: focusedBlockId ?? viewModel.blocks.first?.id) }
-                                Button("To-do List") { insertBlockType(.todo(items: [TodoItem(text: "", done: false)]), at: focusedBlockId ?? viewModel.blocks.first?.id) }
-                                Button("Callout / Quote") { insertBlockType(.callout(text: ""), at: focusedBlockId ?? viewModel.blocks.first?.id) }
-                                Button("Code Block") { insertBlockType(.codeCard(language: "Python", code: "", stdin: "", stdout: ""), at: focusedBlockId ?? viewModel.blocks.first?.id) }
-                                Button("Divider") { insertBlockType(.divider, at: focusedBlockId ?? viewModel.blocks.first?.id) }
-                                Divider()
-                                Button {
-                                    insertBlockType(.graphBlock(expression: ""), at: focusedBlockId ?? viewModel.blocks.first?.id)
-                                } label: {
-                                    Label("Graph (Desmos)", systemImage: "chart.line.uptrend.xyaxis")
-                                }
-                                Button {
-                                    insertBlockType(.mathBlock(latex: ""), at: focusedBlockId ?? viewModel.blocks.first?.id)
-                                } label: {
-                                    Label("Math Equation", systemImage: "function")
-                                }
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "plus")
-                                        .font(.system(size: 15, weight: .semibold))
-                                        .foregroundStyle(.secondary)
-                                    Text("Blocks")
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundStyle(.secondary)
-                                }
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 12)
-                                .background(Color(.systemGray5))
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                            }
-                        }
-                    }
+                        startWithBar
                     }
 
                     // Placeholder when no content
@@ -414,7 +426,8 @@ struct JournalEditorView: View {
                             focusedBlockId: $focusedBlockId,
                             viewModel: viewModel,
                             onReturnKey: { insertParagraphAfter(block.id) },
-                            onSlashTriggered: handleSlashTriggered
+                            onSlashTriggered: handleSlashTriggered,
+                            onBackspaceOnEmpty: { deleteEmptyBlockAndFocusPrevious(block.id) }
                         )
                         .id(block.id)
                     }
@@ -445,7 +458,10 @@ struct JournalEditorView: View {
                 // Palette anchored to the bottom of the content area (sits above keyboard)
                 VStack {
                     Spacer()
-                    SlashCommandPaletteView(onSelect: handleSlashCommandSelected)
+                    SlashCommandPaletteView(
+                        onSelect: handleSlashCommandSelected,
+                        onDismiss: dismissSlashPalette
+                    )
                         .padding(.horizontal, 16)
                         .padding(.bottom, 8)
                 }
@@ -453,6 +469,41 @@ struct JournalEditorView: View {
                     insertion: .move(edge: .bottom).combined(with: .opacity),
                     removal: .move(edge: .bottom).combined(with: .opacity)
                 ))
+            }
+        }
+    }
+
+    /// Creates a live paragraph block then opens the voice dictation sheet.
+    /// As the user speaks, the block is updated in real time via `onLiveUpdate`.
+    private func startJournalVoiceDictation(anchorId: UUID?) {
+        journalSpeechService.reset()
+        let anchor = anchorId ?? viewModel.blocks.last?.id
+        guard let anchor else { return }
+        focusedBlockId = nil // dismiss any open keyboard
+
+        // Create an empty block that will be filled live
+        let liveBlock = NoteBlock(orderIndex: 0, blockType: .paragraph(""))
+        viewModel.insertBlock(after: anchor, newBlock: liveBlock)
+        voiceLiveBlockId = liveBlock.id
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            showVoiceForJournal = true
+        }
+    }
+
+    /// Deletes an empty paragraph block and moves focus (cursor) to the end of the block above it.
+    /// If the block is the only one, clears its text but keeps it (mirrors Apple Notes behaviour).
+    private func deleteEmptyBlockAndFocusPrevious(_ blockId: UUID) {
+        guard let idx = viewModel.blocks.firstIndex(where: { $0.id == blockId }) else { return }
+        guard viewModel.blocks.count > 1 else { return } // keep at least one block
+
+        let previousId = idx > 0 ? viewModel.blocks[idx - 1].id : nil
+        viewModel.deleteBlock(id: blockId)
+
+        if let prevId = previousId {
+            // Small delay lets SwiftUI finish the deletion render before we steal focus
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                focusedBlockId = prevId
             }
         }
     }
@@ -516,15 +567,30 @@ struct JournalEditorView: View {
         }
     }
 
-    /// Inserts text from the inline Feynman chat into the journal as a new paragraph block.
+    /// Inserts the full Feynman response into the journal.
+    /// Splits on double-newlines so each paragraph becomes its own block,
+    /// avoiding any UITextView newline-interception edge cases.
     private func insertTextFromChat(_ text: String) {
         isChatInputFocused = false
-        let anchorId = focusedBlockId ?? viewModel.blocks.last?.id
-        guard let id = anchorId else { return }
-        let newBlock = NoteBlock(orderIndex: 0, blockType: .paragraph(text))
-        viewModel.insertBlock(after: id, newBlock: newBlock)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            focusedBlockId = newBlock.id
+        // Always anchor to the very last block so content appends at the bottom
+        guard var anchorId = viewModel.blocks.last?.id else { return }
+
+        // Split into paragraphs; fall back to the whole text as one block
+        let paragraphs = text
+            .components(separatedBy: "\n\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let chunks = paragraphs.isEmpty ? [text] : paragraphs
+
+        for chunk in chunks {
+            let block = NoteBlock(orderIndex: 0, blockType: .paragraph(chunk))
+            viewModel.insertBlock(after: anchorId, newBlock: block)
+            anchorId = block.id
+        }
+        // Scroll to the last inserted block without stealing the keyboard
+        let lastId = anchorId
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            focusedBlockId = lastId
         }
     }
 }

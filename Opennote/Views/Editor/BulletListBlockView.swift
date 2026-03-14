@@ -65,7 +65,7 @@ struct ListItemField: UIViewRepresentable {
 struct BulletListBlockView: View {
     let items: [String]
     let blockId: UUID
-    @FocusState.Binding var focusedBlockId: UUID?
+    @Binding var focusedBlockId: UUID?
     let onUpdate: ([String]) -> Void
     let onReturnAtLastItem: () -> Void
 

@@ -2,10 +2,11 @@ import SwiftUI
 
 struct BlockRowView: View {
     let block: NoteBlock
-    @FocusState.Binding var focusedBlockId: UUID?
+    @Binding var focusedBlockId: UUID?
     @Bindable var viewModel: JournalEditorViewModel
     let onReturnKey: () -> Void
     var onSlashTriggered: ((UUID, String) -> Void)? = nil
+    var onBackspaceOnEmpty: (() -> Void)? = nil
 
     var body: some View {
         Group {
@@ -17,7 +18,8 @@ struct BlockRowView: View {
                     focusedBlockId: $focusedBlockId,
                     onUpdate: { viewModel.updateBlock(id: block.id, blockType: .paragraph($0)) },
                     onSubmit: onReturnKey,
-                    onSlashTriggered: onSlashTriggered
+                    onSlashTriggered: onSlashTriggered,
+                    onBackspaceOnEmpty: onBackspaceOnEmpty
                 )
 
             case .heading(let level, let text):

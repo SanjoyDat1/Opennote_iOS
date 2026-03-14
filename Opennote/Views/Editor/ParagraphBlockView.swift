@@ -3,10 +3,11 @@ import SwiftUI
 struct ParagraphBlockView: View {
     let text: String
     let blockId: UUID
-    @FocusState.Binding var focusedBlockId: UUID?
+    @Binding var focusedBlockId: UUID?
     let onUpdate: (String) -> Void
     let onSubmit: () -> Void
     var onSlashTriggered: ((UUID, String) -> Void)? = nil
+    var onBackspaceOnEmpty: (() -> Void)? = nil
 
     @State private var appSettings = AppSettings.shared
 
@@ -23,6 +24,7 @@ struct ParagraphBlockView: View {
             onSlashTriggered: { filter in
                 onSlashTriggered?(blockId, filter)
             },
+            onBecameEmpty: onBackspaceOnEmpty,
             onFocusChange: { isFocused in
                 if isFocused {
                     focusedBlockId = blockId

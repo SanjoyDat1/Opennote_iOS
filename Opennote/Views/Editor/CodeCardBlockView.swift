@@ -7,12 +7,13 @@ struct CodeCardBlockView: View {
     let stdin: String
     let stdout: String
     let blockId: UUID
-    @FocusState.Binding var focusedBlockId: UUID?
+    @Binding var focusedBlockId: UUID?
     let onUpdate: (String, String, String, String) -> Void  // language, code, stdin, stdout
 
     private static let supportedLanguages = ["Python", "Java", "C++"]
 
     @State private var isRunning = false
+    @FocusState private var isEditorFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -73,8 +74,12 @@ struct CodeCardBlockView: View {
                 get: { code },
                 set: { onUpdate(language, $0, stdin, stdout) }
             ))
-            .focused($focusedBlockId, equals: blockId)
+            .focused($isEditorFocused)
             .font(.system(size: 14, design: .monospaced))
+            .onChange(of: isEditorFocused) { _, focused in
+                if focused { focusedBlockId = blockId }
+                else if focusedBlockId == blockId { focusedBlockId = nil }
+            }
             .scrollContentBackground(.hidden)
             .padding(12)
             .background(Color(.systemGray6))

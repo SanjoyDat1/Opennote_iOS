@@ -3,7 +3,7 @@ import SwiftUI
 struct FlashcardBlockView: View {
     let items: [FlashcardItem]
     let blockId: UUID
-    @FocusState.Binding var focusedBlockId: UUID?
+    @Binding var focusedBlockId: UUID?
     let onUpdate: ([FlashcardItem]) -> Void
     let onGenerate: () -> Void
     var isGenerating: Bool = false

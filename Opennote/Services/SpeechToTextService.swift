@@ -14,6 +14,8 @@ final class SpeechToTextService: NSObject, ObservableObject {
     @Published var isListening = false
     @Published var errorMessage: String?
     @Published var authorizationStatus: SFSpeechRecognizerAuthorizationStatus = .notDetermined
+    /// Normalised microphone amplitude in 0…1, updated ~15 times/sec.
+    @Published var audioLevel: Float = 0
 
     override init() {
         super.init()
@@ -68,6 +70,16 @@ final class SpeechToTextService: NSObject, ObservableObject {
 
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
             self?.recognitionRequest?.append(buffer)
+
+            // Compute RMS amplitude for the waveform visualiser
+            guard let data = buffer.floatChannelData?[0] else { return }
+            let frameCount = Int(buffer.frameLength)
+            guard frameCount > 0 else { return }
+            var sum: Float = 0
+            for i in 0..<frameCount { sum += data[i] * data[i] }
+            let rms = (sum / Float(frameCount)).squareRoot()
+            let normalised = min(1.0, rms * 30.0)
+            Task { @MainActor in self?.audioLevel = normalised }
         }
 
         audioEngine.prepare()
@@ -100,6 +112,7 @@ final class SpeechToTextService: NSObject, ObservableObject {
         recognitionTask = nil
         audioEngine.inputNode.removeTap(onBus: 0)
         isListening = false
+        audioLevel = 0
     }
 
     func reset() {

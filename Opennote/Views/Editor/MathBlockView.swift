@@ -5,14 +5,20 @@ import WebKit
 struct MathBlockView: View {
     let latex: String
     let blockId: UUID
-    @FocusState.Binding var focusedBlockId: UUID?
+    @Binding var focusedBlockId: UUID?
     let onUpdate: (String) -> Void
+
+    @FocusState private var isFieldFocused: Bool
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             TextField("LaTeX: e.g. \\frac{1}{2} or x^2 + y^2", text: Binding(get: { latex }, set: { onUpdate($0) }))
-                .focused($focusedBlockId, equals: blockId)
+                .focused($isFieldFocused)
                 .font(.system(.body, design: .monospaced))
+                .onChange(of: isFieldFocused) { _, focused in
+                    if focused { focusedBlockId = blockId }
+                    else if focusedBlockId == blockId { focusedBlockId = nil }
+                }
                 .padding(12)
                 .background(Color.opennoteLightGreen)
                 .clipShape(RoundedRectangle(cornerRadius: 12))

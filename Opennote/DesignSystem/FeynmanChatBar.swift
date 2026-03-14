@@ -72,10 +72,15 @@ struct FeynmanChatBar: View {
     // MARK: Collapsed chip ─────────────────────────────────────────────────────
 
     private var collapsedChip: some View {
-        HStack {
-            Spacer()
+        HStack(spacing: 10) {
+            // ── Ask Feynman pill — LEFT ─────────────────────────
             Button {
                 Haptics.impact(.light)
+                // Dismiss the journal keyboard first, then focus the chat input
+                UIApplication.shared.sendAction(
+                    #selector(UIResponder.resignFirstResponder),
+                    to: nil, from: nil, for: nil
+                )
                 onExpandFromCollapsed()
             } label: {
                 HStack(spacing: 6) {
@@ -95,7 +100,28 @@ struct FeynmanChatBar: View {
                 .shadow(color: .black.opacity(0.10), radius: 10, x: 0, y: 4)
             }
             .buttonStyle(.plain)
-            .padding(.trailing, 20)
+            .padding(.leading, 16)
+
+            Spacer()
+
+            // ── Keyboard dismiss — RIGHT ────────────────────────
+            Button {
+                Haptics.impact(.light)
+                UIApplication.shared.sendAction(
+                    #selector(UIResponder.resignFirstResponder),
+                    to: nil, from: nil, for: nil
+                )
+            } label: {
+                Image(systemName: "keyboard.chevron.compact.down")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color(.systemGray))
+                    .frame(width: 38, height: 38)
+                    .background(Color(.systemBackground))
+                    .clipShape(Circle())
+                    .shadow(color: .black.opacity(0.10), radius: 8, x: 0, y: 3)
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 16)
         }
         .padding(.bottom, 10)
         .transition(.asymmetric(
@@ -298,10 +324,15 @@ struct FeynmanChatBar: View {
                 .tint(Color.opennoteGreen)
                 .focused($isFocused)
 
-            // Keyboard dismiss — only while keyboard is up
+            // Keyboard dismiss — visible whenever keyboard is up
             if isFocused {
                 Button {
+                    Haptics.impact(.light)
                     isFocused = false
+                    UIApplication.shared.sendAction(
+                        #selector(UIResponder.resignFirstResponder),
+                        to: nil, from: nil, for: nil
+                    )
                 } label: {
                     Image(systemName: "keyboard.chevron.compact.down")
                         .font(.system(size: 18, weight: .medium))

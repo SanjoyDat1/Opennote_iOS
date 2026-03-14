@@ -4,10 +4,12 @@ struct HeadingBlockView: View {
     let text: String
     let level: Int
     let blockId: UUID
-    @FocusState.Binding var focusedBlockId: UUID?
+    @Binding var focusedBlockId: UUID?
     let onUpdate: (String) -> Void
     let onSubmit: () -> Void
     var onSlashTriggered: ((UUID, String) -> Void)? = nil
+
+    @FocusState private var isFieldFocused: Bool
 
     private var font: Font {
         switch level {
@@ -40,8 +42,12 @@ struct HeadingBlockView: View {
 
     var body: some View {
         TextField("Heading", text: binding)
-            .focused($focusedBlockId, equals: blockId)
+            .focused($isFieldFocused)
             .onSubmit(onSubmit)
             .font(font)
+            .onChange(of: isFieldFocused) { _, focused in
+                if focused { focusedBlockId = blockId }
+                else if focusedBlockId == blockId { focusedBlockId = nil }
+            }
     }
 }

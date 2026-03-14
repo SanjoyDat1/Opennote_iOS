@@ -3,7 +3,7 @@ import SwiftUI
 struct TodoBlockView: View {
     let items: [TodoItem]
     let blockId: UUID
-    @FocusState.Binding var focusedBlockId: UUID?
+    @Binding var focusedBlockId: UUID?
     let onUpdate: ([TodoItem]) -> Void
     let onReturnAtLastItem: () -> Void
 

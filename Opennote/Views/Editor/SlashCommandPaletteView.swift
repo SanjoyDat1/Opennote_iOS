@@ -8,8 +8,8 @@ import SwiftUI
 
 struct SlashCommandPaletteView: View {
     let onSelect: (SlashCommand) -> Void
+    var onDismiss: () -> Void = {}
 
-    // Groups by section in the declared order
     private var groups: [(section: SlashCommand.SlashCommandSection, commands: [SlashCommand])] {
         let all = SlashCommand.allCommands
         return SlashCommand.SlashCommandSection.allCases.compactMap { section in
@@ -19,64 +19,93 @@ struct SlashCommandPaletteView: View {
     }
 
     var body: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(groups, id: \.section.rawValue) { group in
-                    sectionHeader(group.section.rawValue)
-                    ForEach(Array(group.commands.enumerated()), id: \.element.id) { index, cmd in
-                        commandRow(cmd, isFirst: index == 0 && group.section == .basic)
-                        if index < group.commands.count - 1 {
-                            Divider()
-                                .padding(.leading, 58)
-                                .opacity(0.6)
+        VStack(spacing: 0) {
+            // ── Header ──────────────────────────────────────────
+            HStack {
+                Text("Commands")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button {
+                    Haptics.impact(.light)
+                    onDismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Color(.systemGray3))
+                        .frame(width: 26, height: 26)
+                        .background(Color(.systemGray5))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 14)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+
+            Divider().opacity(0.5)
+
+            // ── Scrollable list ──────────────────────────────────
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(groups, id: \.section.rawValue) { group in
+                        sectionHeader(group.section.rawValue)
+                        ForEach(Array(group.commands.enumerated()), id: \.element.id) { index, cmd in
+                            commandRow(cmd)
+                            if index < group.commands.count - 1 {
+                                Divider()
+                                    .padding(.leading, 52)
+                                    .opacity(0.5)
+                            }
                         }
                     }
                 }
+                .padding(.bottom, 6)
             }
-            .padding(.bottom, 8)
         }
-        .frame(maxHeight: 420)
+        .frame(maxHeight: 280)
         .background(Color(.systemBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 18))
-        .shadow(color: .black.opacity(0.13), radius: 24, x: 0, y: 8)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.13), radius: 20, x: 0, y: 6)
     }
 
     // MARK: Section header
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(Color(.systemGray))
-            .padding(.horizontal, 16)
-            .padding(.top, 18)
-            .padding(.bottom, 6)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(Color(.systemGray2))
+            .textCase(.uppercase)
+            .tracking(0.5)
+            .padding(.horizontal, 14)
+            .padding(.top, 12)
+            .padding(.bottom, 4)
     }
 
     // MARK: Command row
-    private func commandRow(_ cmd: SlashCommand, isFirst: Bool) -> some View {
+    private func commandRow(_ cmd: SlashCommand) -> some View {
         Button {
             Haptics.selection()
             onSelect(cmd)
         } label: {
-            HStack(spacing: 14) {
-                // Icon in rounded-square container
+            HStack(spacing: 12) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 8)
+                    RoundedRectangle(cornerRadius: 7)
                         .fill(
                             cmd.section == .ai
                                 ? Color.opennoteLightGreen.opacity(0.6)
                                 : Color(.systemGray5)
                         )
-                        .frame(width: 34, height: 34)
+                        .frame(width: 30, height: 30)
 
                     Group {
                         if let asset = cmd.assetImage {
                             Image(asset)
                                 .resizable()
                                 .scaledToFit()
-                                .frame(width: 18, height: 18)
+                                .frame(width: 16, height: 16)
                         } else {
                             Image(systemName: cmd.icon)
-                                .font(.system(size: 15, weight: .medium))
+                                .font(.system(size: 13, weight: .medium))
                                 .foregroundStyle(
                                     cmd.section == .ai
                                         ? Color.opennoteGreen
@@ -87,14 +116,13 @@ struct SlashCommandPaletteView: View {
                 }
 
                 Text(cmd.title)
-                    .font(.system(size: 17, weight: .regular))
+                    .font(.system(size: 15, weight: .regular))
                     .foregroundStyle(.primary)
 
                 Spacer()
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(isFirst ? Color(.systemGray6) : Color.clear)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

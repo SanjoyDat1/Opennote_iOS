@@ -82,8 +82,11 @@ struct ParagraphTextView: UIViewRepresentable {
         context.coordinator.placeholder = placeholder
         textView.setNeedsDisplay()
 
-        if isFocused, !textView.isFirstResponder {
+        if isFocused && !textView.isFirstResponder {
             textView.becomeFirstResponder()
+            // Place cursor at the end so backspace-to-merge feels natural
+            let end = textView.endOfDocument
+            textView.selectedTextRange = textView.textRange(from: end, to: end)
         }
         if let scrollView = textView.findParentScrollView() {
             scrollView.alwaysBounceHorizontal = false
@@ -120,11 +123,18 @@ struct ParagraphTextView: UIViewRepresentable {
         }
 
         func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
-            if text.isEmpty, range.length > 0 {
-                let newText = (textView.text as NSString).replacingCharacters(in: range, with: "")
-                if newText.isEmpty, parent.onBecameEmpty != nil {
+            // Backspace on an already-empty field → delete block and move up
+            if text.isEmpty {
+                if textView.text.isEmpty {
                     parent.onBecameEmpty?()
                     return false
+                }
+                if range.length > 0 {
+                    let newText = (textView.text as NSString).replacingCharacters(in: range, with: "")
+                    if newText.isEmpty, parent.onBecameEmpty != nil {
+                        parent.onBecameEmpty?()
+                        return false
+                    }
                 }
             }
 

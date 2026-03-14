@@ -6,12 +6,14 @@ struct AIPromptBlockView: View {
     let response: String?
     let blockId: UUID
     let isRunning: Bool
-    @FocusState.Binding var focusedBlockId: UUID?
+    @Binding var focusedBlockId: UUID?
     let onUpdate: (String) -> Void
     let onRun: () -> Void
     var onCancel: (() -> Void)? = nil
     var onAddToNotes: ((String) -> Void)? = nil
     var onClose: (() -> Void)? = nil
+
+    @FocusState private var isFieldFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -31,7 +33,11 @@ struct AIPromptBlockView: View {
                     .font(.system(size: 18, weight: .medium))
                     .foregroundStyle(Color.opennoteGreen)
                 TextField("e.g. Explain this concept", text: Binding(get: { command }, set: { onUpdate($0) }))
-                    .focused($focusedBlockId, equals: blockId)
+                    .focused($isFieldFocused)
+                    .onChange(of: isFieldFocused) { _, focused in
+                        if focused { focusedBlockId = blockId }
+                        else if focusedBlockId == blockId { focusedBlockId = nil }
+                    }
                     .font(.system(size: 17, design: .default))
                     .disabled(isRunning)
                 Button {
