@@ -134,7 +134,7 @@ struct FeynmanChatBar: View {
 
     private var chatPanel: some View {
         VStack(spacing: 0) {
-            // Header: label + dismiss button
+            // Header: label + active mode badge + dismiss
             HStack(spacing: 0) {
                 HStack(spacing: 5) {
                     Image(systemName: "sparkles")
@@ -143,6 +143,20 @@ struct FeynmanChatBar: View {
                     Text("Feynman")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(.secondary)
+
+                    // Active mode badge
+                    HStack(spacing: 3) {
+                        Image(systemName: conversation.selectedMode.icon)
+                            .font(.system(size: 9, weight: .semibold))
+                        Text(conversation.selectedMode.title)
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundStyle(Color.opennoteGreen)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(Color.opennoteGreen.opacity(0.1))
+                    .clipShape(Capsule())
+                    .animation(.easeOut(duration: 0.2), value: conversation.selectedMode.title)
                 }
                 Spacer()
                 Button {
@@ -305,69 +319,128 @@ struct FeynmanChatBar: View {
     // MARK: Input bar ──────────────────────────────────────────────────────────
 
     private var inputBar: some View {
-        HStack(alignment: .center, spacing: 12) {
-            // + attachment / tools
-            Button {
-                Haptics.impact(.light)
-                onPlus()
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 20, weight: .medium))
-                    .foregroundStyle(Color.opennoteGreen)
-            }
-            .buttonStyle(.plain)
-
-            // Expanding text field
-            TextField("Ask Feynman…", text: $viewModel.inputText, axis: .vertical)
-                .lineLimit(1...5)
-                .font(.system(size: 17))
-                .tint(Color.opennoteGreen)
-                .focused($isFocused)
-
-            // Keyboard dismiss — visible whenever keyboard is up
-            if isFocused {
+        VStack(spacing: 0) {
+            // ── Main text-input row ───────────────────────────────
+            HStack(alignment: .center, spacing: 12) {
+                // + attachment / tools
                 Button {
                     Haptics.impact(.light)
-                    isFocused = false
-                    UIApplication.shared.sendAction(
-                        #selector(UIResponder.resignFirstResponder),
-                        to: nil, from: nil, for: nil
-                    )
+                    onPlus()
                 } label: {
-                    Image(systemName: "keyboard.chevron.compact.down")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(Color(.systemGray3))
+                    Image(systemName: "plus")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(Color.opennoteGreen)
                 }
                 .buttonStyle(.plain)
-                .transition(.scale.combined(with: .opacity))
-            }
 
-            // Send / stop button
-            Button {
-                Haptics.impact(.medium)
-                handleSendOrStop()
-            } label: {
-                let active = viewModel.hasText || conversation.isStreaming
-                Image(systemName: conversation.isStreaming ? "stop.fill" : "arrow.up")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(active ? .white : Color(.systemGray3))
-                    .frame(width: 30, height: 30)
-                    .background(Circle().fill(active ? Color.opennoteGreen : Color(.systemGray5)))
+                // Expanding text field
+                TextField("Ask Feynman…", text: $viewModel.inputText, axis: .vertical)
+                    .lineLimit(1...5)
+                    .font(.system(size: 17))
+                    .tint(Color.opennoteGreen)
+                    .focused($isFocused)
+
+                // Keyboard dismiss — visible whenever keyboard is up
+                if isFocused {
+                    Button {
+                        Haptics.impact(.light)
+                        isFocused = false
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil, from: nil, for: nil
+                        )
+                    } label: {
+                        Image(systemName: "keyboard.chevron.compact.down")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundStyle(Color(.systemGray3))
+                    }
+                    .buttonStyle(.plain)
+                    .transition(.scale.combined(with: .opacity))
+                }
+
+                // Send / stop button
+                Button {
+                    Haptics.impact(.medium)
+                    handleSendOrStop()
+                } label: {
+                    let active = viewModel.hasText || conversation.isStreaming
+                    Image(systemName: conversation.isStreaming ? "stop.fill" : "arrow.up")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(active ? .white : Color(.systemGray3))
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(active ? Color.opennoteGreen : Color(.systemGray5)))
+                }
+                .buttonStyle(.plain)
+                .disabled(!viewModel.hasText && !conversation.isStreaming)
+                .animation(.easeOut(duration: 0.15), value: viewModel.hasText)
             }
-            .buttonStyle(.plain)
-            .disabled(!viewModel.hasText && !conversation.isStreaming)
-            .animation(.easeOut(duration: 0.15), value: viewModel.hasText)
+            .padding(.horizontal, 16)
+            .padding(.top, 13)
+            .padding(.bottom, isFocused || !conversation.messages.isEmpty ? 8 : 13)
+
+            // ── Mode chip row (shown when bar is active) ──────────
+            if isFocused || !conversation.messages.isEmpty {
+                modeChipRow
+                    .padding(.bottom, 10)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 13)
         .background(
-            RoundedRectangle(cornerRadius: 30)
+            RoundedRectangle(cornerRadius: 26)
                 .fill(Color.opennoteLightGreen.opacity(0.55))
         )
         .padding(.horizontal, 12)
         .padding(.top, conversation.messages.isEmpty ? 0 : 6)
         .padding(.bottom, isFocused ? 0 : 10)
+        .animation(.spring(response: 0.28, dampingFraction: 0.85), value: isFocused)
         .animation(.spring(response: 0.25), value: conversation.messages.isEmpty)
+    }
+
+    // MARK: Mode chip row ──────────────────────────────────────────────────────
+
+    private var modeChipRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(FeynmanMode.allCases) { mode in
+                    modeChip(mode)
+                }
+            }
+            .padding(.horizontal, 14)
+        }
+    }
+
+    private func modeChip(_ mode: FeynmanMode) -> some View {
+        let isSelected = viewModel.selectedMode == mode
+        return Button {
+            Haptics.selection()
+            withAnimation(.spring(response: 0.22, dampingFraction: 0.8)) {
+                viewModel.selectedMode = mode
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: mode.icon)
+                    .font(.system(size: 10, weight: .semibold))
+                Text(mode.title)
+                    .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
+            }
+            .foregroundStyle(isSelected ? Color.opennoteGreen : Color(.systemGray))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                isSelected
+                    ? Color.white.opacity(0.85)
+                    : Color.white.opacity(0.38)
+            )
+            .clipShape(Capsule())
+            .overlay(
+                Capsule().stroke(
+                    isSelected ? Color.opennoteGreen.opacity(0.45) : Color.clear,
+                    lineWidth: 1
+                )
+            )
+        }
+        .buttonStyle(.plain)
+        .animation(.spring(response: 0.2), value: isSelected)
     }
 
     // MARK: Actions ────────────────────────────────────────────────────────────

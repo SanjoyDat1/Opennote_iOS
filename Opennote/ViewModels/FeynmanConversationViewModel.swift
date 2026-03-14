@@ -7,7 +7,7 @@ import SwiftUI
 final class FeynmanConversationViewModel {
     var messages: [FeynmanChatMessage] = []
     var isStreaming: Bool = false
-    var selectedMode: FeynmanMode = .explain
+    var selectedMode: FeynmanMode = .auto
 
     private var streamTask: Task<Void, Never>?
 

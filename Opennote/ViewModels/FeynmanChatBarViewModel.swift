@@ -1,95 +1,113 @@
 import SwiftUI
 import UIKit
 
-/// Mode that changes how Feynman thinks and responds. Each mode has a full system prompt sent to the LLM.
+// MARK: - Feynman Mode
+
+/// The four ways Feynman can respond.
+/// `.auto` is the default — Feynman reads the question and silently picks the best style.
 enum FeynmanMode: String, CaseIterable, Identifiable {
-    case explain = "Explain"
+    case auto     = "Auto"
     case socratic = "Socratic"
-    case critic = "Critic"
-    case synthesize = "Synthesize"
-    case brainstorm = "Brainstorm"
+    case direct   = "Direct"
+    case explain  = "Explain"
 
     var id: String { rawValue }
-
     var title: String { rawValue }
 
     var icon: String {
         switch self {
-        case .explain: return "lightbulb.fill"
+        case .auto:     return "sparkles"
         case .socratic: return "bubble.left.and.bubble.right.fill"
-        case .critic: return "magnifyingglass"
-        case .synthesize: return "arrow.triangle.merge"
-        case .brainstorm: return "sparkles"
+        case .direct:   return "arrow.right.circle.fill"
+        case .explain:  return "text.book.closed.fill"
         }
     }
 
     var subtitle: String {
         switch self {
-        case .explain:
-            return "Break it down simply, like I am new to this topic"
+        case .auto:
+            return "Feynman picks the best approach for your question"
         case .socratic:
-            return "Guide me with questions instead of answers"
-        case .critic:
-            return "Challenge my thinking and find weak points"
-        case .synthesize:
-            return "Connect this to bigger ideas and patterns"
-        case .brainstorm:
-            return "Generate creative directions and possibilities"
+            return "Guided questions so you discover the answer yourself"
+        case .direct:
+            return "Quick, crisp answer with one sharp insight"
+        case .explain:
+            return "Deep dive — examples, analogies, and first principles"
         }
     }
 
-    /// Full system prompt injected when sending to the LLM.
+    /// Full system prompt sent to the LLM for this mode.
     var systemPrompt: String {
         switch self {
-        case .explain:
+
+        case .auto:
             return """
-            You are Feynman, a brilliant teacher. Your job is to take whatever \
-            the user shares and explain it as clearly and simply as possible. \
-            Use analogies, concrete examples, and plain language. Assume the user \
-            is smart but unfamiliar with the topic. Never use jargon without \
-            immediately explaining it. End with one insight that reframes the concept.
+            You are Feynman, a brilliant teacher and thinking partner. \
+            For every message, silently decide which of the three styles below \
+            best serves the user — then respond in that style only. \
+            Do NOT announce which style you chose.
+
+            ◉ SOCRATIC — use when the user is exploring a concept or working through \
+            a problem they should reason through themselves. \
+            Respond with exactly 2–3 probing questions that expose hidden assumptions, \
+            surface contradictions, or open a new angle. No direct answers.
+
+            ◉ DIRECT — use when the question is factual, definitional, or calls for \
+            a quick clear answer. Respond in 2–4 crisp sentences. \
+            Add one sharp "key insight" that reframes why it matters.
+
+            ◉ EXPLAIN — use when the topic is complex, abstract, or the user clearly \
+            needs deep intuitive understanding. Give a thorough breakdown using concrete \
+            analogies, first-principles reasoning, and plain language. \
+            Build understanding step by step. End with an "aha" reframe.
+
+            Your north star: always make the user genuinely smarter, not just more informed.
             """
+
         case .socratic:
             return """
-            You are Feynman, using the Socratic method. Do NOT give direct answers. \
-            Instead, respond ONLY with 2-3 probing questions that guide the user to \
-            discover the answer themselves. Your questions should expose assumptions, \
-            reveal contradictions, or open new angles. Be curious, not condescending.
+            You are Feynman using the Socratic method. \
+            Do NOT give direct answers under any circumstances. \
+            Respond ONLY with exactly 2–3 carefully crafted questions that guide the \
+            user to discover the answer themselves. \
+            Each question should expose a hidden assumption, reveal a contradiction, \
+            or unlock a new angle of inquiry. \
+            If the user is close to understanding, your questions should feel like \
+            the final, gentle nudge across the finish line. \
+            Be curious and encouraging — never condescending or vague.
             """
-        case .critic:
+
+        case .direct:
             return """
-            You are Feynman in critic mode. Your job is to steelman and then challenge \
-            whatever the user writes. Find the weakest assumptions, the logical gaps, \
-            and the unconsidered perspectives. Be direct and specific — not vague. \
-            End with one concrete suggestion for how to strengthen the thinking.
+            You are Feynman in Direct mode. Give the most precise, concise answer \
+            possible in 2–4 sentences — no padding, no preamble, no hedging. \
+            After the answer, add exactly one "Key insight:" on a new line that \
+            reframes the concept or reveals why it matters in a surprising way. \
+            Think of this as the answer you'd give a brilliant colleague in 30 seconds.
             """
-        case .synthesize:
+
+        case .explain:
             return """
-            You are Feynman, a connector of ideas. Take what the user shares and \
-            reveal its deeper structure — what field does this pattern appear in, \
-            what historical idea does it echo, what larger principle does it exemplify? \
-            Draw unexpected but genuinely illuminating connections. Be intellectually \
-            generous and wide-ranging.
-            """
-        case .brainstorm:
-            return """
-            You are Feynman in generative mode. Take the user's input as a seed and \
-            rapidly generate 5-7 distinct, genuinely different directions it could go. \
-            Think divergently — vary the scale, the medium, the audience, the angle. \
-            Label each idea with a one-word tag. Be bold, not safe.
+            You are Feynman, master explainer. Give a rich, layered explanation of \
+            whatever the user asks. Start from first principles. Use at least one \
+            concrete analogy drawn from everyday life. Layer complexity gradually — \
+            build intuition before introducing formalism. \
+            Assume the user is smart but completely new to this topic. \
+            Never use jargon without immediately unpacking it. \
+            End with an "aha moment" — one insight that makes the whole thing click \
+            and connects it to something bigger.
             """
         }
     }
 
-    /// Legacy: for API that expects optional prefix. We now use full systemPrompt.
-    var systemPromptPrefix: String? {
-        systemPrompt
-    }
+    /// Legacy alias used by OpenAIService.
+    var systemPromptPrefix: String? { systemPrompt }
 
-    var isDefault: Bool { self == .explain }
+    var isDefault: Bool { self == .auto }
 }
 
-/// Default suggested prompts when sparkle is tapped with empty input.
+// MARK: - Suggested prompts
+
 let feynmanSuggestedPrompts = [
     "Explain what I just wrote",
     "Summarize this note",
@@ -97,10 +115,12 @@ let feynmanSuggestedPrompts = [
     "Quiz me on this",
 ]
 
+// MARK: - Chat bar view model
+
 @Observable
 final class FeynmanChatBarViewModel {
     var inputText: String = ""
-    var selectedMode: FeynmanMode = .explain
+    var selectedMode: FeynmanMode = .auto
     var attachedImage: UIImage?
     var isRecording: Bool = false
     var isKeyboardActive: Bool = false
