@@ -8,6 +8,8 @@ struct JournalEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(NotesStore.self) private var notesStore
     @State private var focusedBlockId: UUID?
+    /// True during the brief window of a block deletion so the scroll doesn't animate.
+    @State private var suppressNextScrollAnimation = false
     @State private var isKeyboardVisible = false
     @State private var viewModel: JournalEditorViewModel
     @State private var showSettingsSheet = false
@@ -440,8 +442,15 @@ struct JournalEditorView: View {
             }
             .onChange(of: focusedBlockId) { _, newId in
                 guard let id = newId else { return }
-                withAnimation(.easeOut(duration: 0.25)) {
-                    proxy.scrollTo(id, anchor: .center)
+                if suppressNextScrollAnimation {
+                    // Deletion path: scroll only enough to make the block visible, no animation
+                    proxy.scrollTo(id, anchor: nil)
+                    suppressNextScrollAnimation = false
+                } else {
+                    // Normal tap-to-focus: gentle scroll only if needed
+                    withAnimation(.easeOut(duration: 0.18)) {
+                        proxy.scrollTo(id, anchor: nil)
+                    }
                 }
             }
             }
@@ -498,11 +507,20 @@ struct JournalEditorView: View {
         guard viewModel.blocks.count > 1 else { return } // keep at least one block
 
         let previousId = idx > 0 ? viewModel.blocks[idx - 1].id : nil
-        viewModel.deleteBlock(id: blockId)
 
+        // Flag BEFORE deletion so the scroll onChange sees it immediately
+        if previousId != nil { suppressNextScrollAnimation = true }
+
+        // Delete with no layout animation — prevents the jarring block-slide effect
+        var t = Transaction(animation: nil)
+        t.disablesAnimations = true
+        withTransaction(t) {
+            viewModel.deleteBlock(id: blockId)
+        }
+
+        // Move focus on the next run-loop tick (lets UIKit settle the responder chain)
         if let prevId = previousId {
-            // Small delay lets SwiftUI finish the deletion render before we steal focus
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            DispatchQueue.main.async {
                 focusedBlockId = prevId
             }
         }
