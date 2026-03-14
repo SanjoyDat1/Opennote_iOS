@@ -48,6 +48,18 @@ struct FeynmanChatBar: View {
                     }
                     inputBar
                 }
+                // Solid backing so journal text never bleeds through the input area
+                .background(Color(.systemBackground))
+                .overlay(alignment: .top) {
+                    // Thin fade gradient at the top edge for a soft separation
+                    LinearGradient(
+                        colors: [Color(.systemBackground).opacity(0), Color(.systemBackground)],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                    .frame(height: 18)
+                    .offset(y: -18)
+                    .allowsHitTesting(false)
+                }
                 .onChange(of: conversation.messages.count) { _, _ in
                     // Auto-expand whenever a new message arrives
                     isChatMinimized = false
@@ -387,7 +399,7 @@ struct FeynmanChatBar: View {
         }
         .background(
             RoundedRectangle(cornerRadius: 26)
-                .fill(Color.opennoteLightGreen.opacity(0.55))
+                .fill(Color.opennoteLightGreen.opacity(0.82))
         )
         .padding(.horizontal, 12)
         .padding(.top, conversation.messages.isEmpty ? 0 : 6)
