@@ -33,6 +33,6 @@ struct ParagraphBlockView: View {
                 }
             }
         )
-        .frame(minHeight: 40)
+        .frame(minHeight: 22)
     }
 }

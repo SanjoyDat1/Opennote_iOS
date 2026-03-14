@@ -277,11 +277,10 @@ struct JournalEditorView: View {
         }
     }
 
+    /// Inserts a scanned-photo result by parsing its markdown into proper blocks,
+    /// always appending at the end of the note (same pipeline as LLM chat output).
     private func insertPhotoToTextResult(_ text: String) {
-        guard let blockId = slashBlockId ?? viewModel.blocks.first?.id else { return }
-        let newBlock = NoteBlock(orderIndex: 0, blockType: .paragraph(text))
-        viewModel.insertBlock(after: blockId, newBlock: newBlock)
-        focusedBlockId = newBlock.id
+        insertTextFromChat(text)
     }
 
     private var topBar: some View {
@@ -406,7 +405,7 @@ struct JournalEditorView: View {
         ZStack(alignment: .topLeading) {
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
+                    VStack(alignment: .leading, spacing: 8) {
                     if viewModel.blocks.count == 1, isBlockEmpty(viewModel.blocks[0]) {
                         startWithBar
                     }
@@ -473,15 +472,16 @@ struct JournalEditorView: View {
         }
     }
 
-    /// Creates a live paragraph block then opens the voice dictation sheet.
+    /// Creates a live paragraph block at the END of the note then opens the voice sheet.
     /// As the user speaks, the block is updated in real time via `onLiveUpdate`.
-    private func startJournalVoiceDictation(anchorId: UUID?) {
+    /// Save keeps the block; Cancel removes it.
+    private func startJournalVoiceDictation(anchorId: UUID? = nil) {
         journalSpeechService.reset()
-        let anchor = anchorId ?? viewModel.blocks.last?.id
-        guard let anchor else { return }
+        // Always append to the very last block so voice notes land at the bottom
+        guard let anchor = viewModel.blocks.last?.id else { return }
         focusedBlockId = nil // dismiss any open keyboard
 
-        // Create an empty block that will be filled live
+        // Create an empty placeholder that live transcription will fill
         let liveBlock = NoteBlock(orderIndex: 0, blockType: .paragraph(""))
         viewModel.insertBlock(after: anchor, newBlock: liveBlock)
         voiceLiveBlockId = liveBlock.id
@@ -584,24 +584,38 @@ struct JournalEditorView: View {
         }
     }
 
-    /// Converts a markdown string (typical LLM output) into an ordered array of NoteBlocks.
+    /// Converts a markdown string (typical LLM / scan output) into an ordered array of NoteBlocks.
     /// Supported: headings (h1–h3), fenced code blocks, dividers, and paragraphs.
-    /// Lists are intentionally rendered as plain paragraphs (better visual consistency).
+    /// Consecutive body-text lines with NO blank line between them are merged into a single
+    /// paragraph block (with "\n" within), so AI-wrapped sentences don't scatter across many
+    /// thin blocks. A blank line always starts a new paragraph block.
     private func markdownToBlocks(_ raw: String) -> [NoteBlock] {
         var result: [NoteBlock] = []
         let lines = raw.components(separatedBy: "\n")
         var i = 0
+        var pendingLines: [String] = []  // body-text accumulator
+
+        func flushPending() {
+            guard !pendingLines.isEmpty else { return }
+            let text = pendingLines.joined(separator: "\n")
+            if !text.isEmpty {
+                result.append(NoteBlock(orderIndex: 0, blockType: .paragraph(text)))
+            }
+            pendingLines = []
+        }
 
         while i < lines.count {
             let trimmed = lines[i].trimmingCharacters(in: .whitespaces)
 
-            // — blank line: skip
+            // — blank line: flush accumulated body text, skip
             if trimmed.isEmpty {
+                flushPending()
                 i += 1; continue
             }
 
             // — fenced code block ```lang … ```
             if trimmed.hasPrefix("```") {
+                flushPending()
                 let lang = String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)
                 var codeLines: [String] = []
                 i += 1
@@ -621,25 +635,29 @@ struct JournalEditorView: View {
 
             // — horizontal rule
             if trimmed == "---" || trimmed == "***" || trimmed == "___" {
+                flushPending()
                 result.append(NoteBlock(orderIndex: 0, blockType: .divider))
                 i += 1; continue
             }
 
             // — headings (### ## #)
             if trimmed.hasPrefix("### ") {
+                flushPending()
                 result.append(NoteBlock(orderIndex: 0, blockType: .heading(level: 3, text: stripInline(String(trimmed.dropFirst(4))))))
                 i += 1; continue
             }
             if trimmed.hasPrefix("## ") {
+                flushPending()
                 result.append(NoteBlock(orderIndex: 0, blockType: .heading(level: 2, text: stripInline(String(trimmed.dropFirst(3))))))
                 i += 1; continue
             }
             if trimmed.hasPrefix("# ") {
+                flushPending()
                 result.append(NoteBlock(orderIndex: 0, blockType: .heading(level: 1, text: stripInline(String(trimmed.dropFirst(2))))))
                 i += 1; continue
             }
 
-            // — strip list markers (-, *, •, 1.) and render as plain paragraphs
+            // — body text: strip list markers, accumulate (merge consecutive lines)
             var content = trimmed
             if content.hasPrefix("- ") || content.hasPrefix("* ") || content.hasPrefix("• ") {
                 content = String(content.dropFirst(2))
@@ -649,11 +667,12 @@ struct JournalEditorView: View {
             }
             let cleaned = stripInline(content)
             if !cleaned.isEmpty {
-                result.append(NoteBlock(orderIndex: 0, blockType: .paragraph(cleaned)))
+                pendingLines.append(cleaned)
             }
             i += 1
         }
 
+        flushPending()
         return result.isEmpty ? [NoteBlock(orderIndex: 0, blockType: .paragraph(raw))] : result
     }
 

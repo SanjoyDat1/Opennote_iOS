@@ -54,31 +54,33 @@ struct ScanResultView: View {
     var body: some View {
         NavigationStack {
             ZStack(alignment: .bottom) {
-
-                // ── Main scroll area ──────────────────────────────────
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-
-                        // Progress / status banner
-                        if isProcessing || statusText != "" {
-                            statusBanner
-                                .padding(.horizontal, 20)
-                                .padding(.top, 14)
-                                .padding(.bottom, 4)
-                        }
-
-                        // Rendered note preview (streams in live)
-                        if !session.formattedText.isEmpty {
-                            MarkdownNotePreview(markdown: session.formattedText)
-                                .padding(.horizontal, 24)
-                                .padding(.top, 20)
-                                .padding(.bottom, 120)
-                        } else if !isProcessing {
-                            emptyState
+                if isProcessing {
+                    // ── Full-screen Feynman analyzing animation ───────
+                    ScanAnalyzingView(phase: session.phase)
+                        .transition(.opacity)
+                } else {
+                    // ── Result scroll area ────────────────────────────
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            if isFailed {
+                                statusBanner
+                                    .padding(.horizontal, 20)
+                                    .padding(.top, 14)
+                                    .padding(.bottom, 4)
+                            }
+                            if !session.formattedText.isEmpty {
+                                MarkdownNotePreview(markdown: session.formattedText)
+                                    .padding(.horizontal, 24)
+                                    .padding(.top, 20)
+                                    .padding(.bottom, 120)
+                            } else if !isProcessing {
+                                emptyState
+                            }
                         }
                     }
+                    .background(Color(.systemBackground))
+                    .transition(.opacity)
                 }
-                .background(Color(.systemBackground))
 
                 // ── Floating insert button ────────────────────────────
                 if canInsert {
@@ -90,14 +92,14 @@ struct ScanResultView: View {
                     retryButton
                 }
             }
-            .navigationTitle("Scan Result")
+            .animation(.easeInOut(duration: 0.45), value: isProcessing)
+            .navigationTitle(isProcessing ? "" : "Scan Result")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { onDismiss() }
                 }
-                // Original image menu
-                if session.capturedImage != nil {
+                if !isProcessing, session.capturedImage != nil {
                     ToolbarItem(placement: .primaryAction) {
                         Menu {
                             Button {
@@ -155,27 +157,18 @@ struct ScanResultView: View {
 
     // MARK: Sub-views
 
+    /// Shown only when the phase is .failed
     private var statusBanner: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if isProcessing {
-                ProgressView(value: progressValue)
-                    .tint(Color.opennoteGreen)
-                    .animation(.easeInOut(duration: 0.4), value: progressValue)
-            }
-            HStack(spacing: 6) {
-                if isProcessing {
-                    ProgressView()
-                        .scaleEffect(0.75)
-                        .tint(Color.opennoteGreen)
-                }
-                Text(statusText)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(isFailed ? Color.red : Color.secondary)
-            }
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(Color.red)
+            Text(statusText)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Color.red)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(.systemGray6))
+        .background(Color.red.opacity(0.08))
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
@@ -248,6 +241,110 @@ struct ScanResultView: View {
         .padding(.top, 80)
         .padding(.horizontal, 40)
         .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - Scan Analyzing Animation
+
+private struct ScanAnalyzingView: View {
+    let phase: ScanSessionModel.Phase
+
+    @State private var floatY: CGFloat = 0
+    @State private var tilt: Double = 0
+    @State private var glowScale: CGFloat = 1.0
+    @State private var glowOpacity: Double = 0.25
+    @State private var dotIndex: Int = 0
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer()
+
+            // ── Animated logo ─────────────────────────────────────────
+            ZStack {
+                // Soft radial glow
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color.opennoteGreen.opacity(glowOpacity), .clear],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 80
+                        )
+                    )
+                    .frame(width: 180, height: 180)
+                    .scaleEffect(glowScale)
+                    .blur(radius: 8)
+
+                // Paper-airplane logo
+                Image("logo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 88, height: 88)
+                    .offset(y: floatY)
+                    .rotationEffect(.degrees(tilt))
+            }
+            .frame(height: 180)
+
+            Spacer().frame(height: 32)
+
+            // ── Text ──────────────────────────────────────────────────
+            VStack(spacing: 10) {
+                Text("Feynman is analyzing\nyour notes")
+                    .font(.system(size: 24, weight: .bold))
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.primary)
+
+                Text(phaseLabel)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Color.opennoteGreen)
+                    .animation(.easeInOut(duration: 0.3), value: phaseLabel)
+                    .id(phaseLabel)
+
+                // Bouncing dots
+                HStack(spacing: 7) {
+                    ForEach(0..<3, id: \.self) { idx in
+                        Circle()
+                            .fill(Color.opennoteGreen)
+                            .frame(width: 7, height: 7)
+                            .scaleEffect(dotIndex == idx ? 1.35 : 0.85)
+                            .opacity(dotIndex == idx ? 1.0 : 0.35)
+                            .animation(.easeInOut(duration: 0.3), value: dotIndex)
+                    }
+                }
+                .padding(.top, 8)
+            }
+            .padding(.horizontal, 40)
+
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemBackground))
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
+                floatY = -14
+            }
+            withAnimation(.easeInOut(duration: 3.8).repeatForever(autoreverses: true)) {
+                tilt = 7
+            }
+            withAnimation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true)) {
+                glowScale = 1.18
+                glowOpacity = 0.5
+            }
+        }
+        .onReceive(Timer.publish(every: 0.42, on: .main, in: .common).autoconnect()) { _ in
+            dotIndex = (dotIndex + 1) % 3
+        }
+    }
+
+    private var phaseLabel: String {
+        switch phase {
+        case .enhancing:             return "Enhancing your scan..."
+        case .recognizing:           return "Reading your handwriting..."
+        case .formatting(let p):
+            let pct = Int((0.25 + p * 0.75) * 100)
+            return "Structuring your notes… \(pct)%"
+        default:                     return "Processing..."
+        }
     }
 }
 
