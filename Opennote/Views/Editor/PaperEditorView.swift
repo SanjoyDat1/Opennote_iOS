@@ -74,16 +74,7 @@ struct PaperEditorView: View {
         .navigationBarBackButtonHidden(true)
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
-                HStack {
-                    Spacer()
-                    Button("Done") {
-                        Haptics.selection()
-                        isEditorFocused = false
-                    }
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(Color.opennoteGreen)
-                }
-                .padding(.vertical, 4)
+                KeyboardDismissAccessory(onDismiss: { isEditorFocused = false })
             }
         }
         .onDisappear {
@@ -128,20 +119,9 @@ struct PaperEditorView: View {
 
             Button {
                 Haptics.impact(.light)
-                showSettingsSheet = true
+                showAISheet = true
             } label: {
-                Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.primary)
-            }
-            .buttonStyle(.plain)
-
-            ShareLink(
-                item: content,
-                subject: Text(editedTitle),
-                message: Text("Shared from Opennote")
-            ) {
-                Text("Share")
+                Text("Ask Feynman")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 14)
@@ -149,6 +129,22 @@ struct PaperEditorView: View {
                     .background(Color.opennoteGreen)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             }
+            .buttonStyle(.plain)
+
+            PhotoToTextButton(noteText: $content)
+
+            Button {
+                Haptics.impact(.light)
+                showSettingsSheet = true
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .frame(width: 44, height: 44)
+                    .background(Color(.systemGray5))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -534,16 +530,7 @@ private struct PaperAISheet: View {
                     .foregroundStyle(.primary)
                 }
                 ToolbarItemGroup(placement: .keyboard) {
-                    HStack {
-                        Spacer()
-                        Button("Done") {
-                            Haptics.selection()
-                            isPromptFocused = false
-                        }
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(Color.opennoteGreen)
-                    }
-                    .padding(.vertical, 8)
+                    KeyboardDismissAccessory(onDismiss: { isPromptFocused = false })
                 }
             }
         }

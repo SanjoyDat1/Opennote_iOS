@@ -1,22 +1,30 @@
 import SwiftUI
 import PDFKit
 
-/// Settings sheet for journals - matches the exact UI spec. All options functional.
+// MARK: - Journal Settings Sheet
+//
+// Matches the screenshot exactly:
+//  ⊞ Settings header | Done button
+//  Font picker (Default / Serif with selection border)
+//  Record Your Notes row → pushes NotesRecorderSheet
+//  Export to Markdown, Export to PDF, Clone journal, Version history
+//  Move to Trash (red)
+//  Footer: Word Count + Last saved
+
 struct JournalSettingsSheet: View {
     @Binding var isPresented: Bool
     let journal: Journal
     @Bindable var viewModel: JournalEditorViewModel
     @Environment(NotesStore.self) private var notesStore
-    @Environment(\.dismiss) private var dismiss
     var onCloneSelect: ((Journal) -> Void)?
     var onDelete: () -> Void
+    var onInsertText: ((String) -> Void)?
 
-    @State private var showFrequencySheet = false
-    @State private var showIntegrationsSheet = false
     @State private var showVersionHistorySheet = false
     @State private var showDeleteConfirmation = false
     @State private var showShareSheet = false
     @State private var shareItems: [Any] = []
+    @State private var navigateToRecorder = false
 
     @Bindable private var appSettings = AppSettings.shared
 
@@ -24,111 +32,85 @@ struct JournalSettingsSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 20) {
-                    // Group 1: AI/Suggestion Settings
+
+                    // MARK: Font picker
+                    fontSection
+
+                    // MARK: Record Your Notes
                     settingsCard {
-                        VStack(spacing: 0) {
-                            settingsRow(icon: "lightbulb.sparkle", title: "Proactive Suggestions") {
-                                Toggle("", isOn: $appSettings.proactiveSuggestions)
-                                    .labelsHidden()
-                            }
-                            Divider().padding(.leading, 48)
-                            Button {
-                                showFrequencySheet = true
-                            } label: {
-                                settingsRow(icon: "hourglass", title: "Frequency", subtitle: appSettings.suggestionFrequency.rawValue, showChevron: true) { EmptyView() }
-                            }
-                            .buttonStyle(.plain)
-                            Divider().padding(.leading, 48)
-                            Button {
-                                showIntegrationsSheet = true
-                            } label: {
-                                settingsRow(icon: "square.grid.2x2", title: "Integrations", subtitle: "Connect your apps", showChevron: true) { EmptyView() }
-                            }
-                            .buttonStyle(.plain)
-                            Divider().padding(.leading, 48)
-                            settingsRow(icon: "waveform", title: "Record Your Notes", showChevron: false) {
-                                EmptyView()
-                            }
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                Haptics.impact(.light)
-                                // Record: placeholder for future audio recording
-                            }
+                        NavigationLink(destination: recorderDestination) {
+                            settingsRow(icon: "waveform", title: "Record Your Notes")
                         }
+                        .buttonStyle(.plain)
                     }
 
-                    // Group 2: Export/Management
+                    // MARK: Export / Management
                     settingsCard {
                         VStack(spacing: 0) {
-                            Button {
-                                exportToMarkdown()
-                            } label: {
-                                settingsRow(icon: "arrow.down.doc", title: "Export to Markdown", showChevron: false) { EmptyView() }
+                            Button { exportToMarkdown() } label: {
+                                settingsRow(icon: "arrow.down.doc", title: "Export to Markdown")
                             }
                             .buttonStyle(.plain)
-                            Divider().padding(.leading, 48)
-                            Button {
-                                exportToPDF()
-                            } label: {
-                                settingsRow(icon: "doc.richtext", title: "Export to PDF", showChevron: false) { EmptyView() }
+
+                            rowDivider
+
+                            Button { exportToPDF() } label: {
+                                settingsRow(icon: "doc.richtext", title: "Export to PDF")
                             }
                             .buttonStyle(.plain)
-                            Divider().padding(.leading, 48)
-                            Button {
-                                cloneJournal()
-                            } label: {
-                                settingsRow(icon: "doc.on.doc", title: "Clone journal", showChevron: false) { EmptyView() }
+
+                            rowDivider
+
+                            Button { cloneJournal() } label: {
+                                settingsRow(icon: "doc.on.doc", title: "Clone journal")
                             }
                             .buttonStyle(.plain)
-                            Divider().padding(.leading, 48)
-                            Button {
-                                showVersionHistorySheet = true
-                            } label: {
-                                settingsRow(icon: "clock.arrow.circlepath", title: "Version history", showChevron: false) { EmptyView() }
+
+                            rowDivider
+
+                            Button { showVersionHistorySheet = true } label: {
+                                settingsRow(icon: "clock.arrow.circlepath", title: "Version history")
                             }
                             .buttonStyle(.plain)
-                            Divider().padding(.leading, 48)
+
+                            rowDivider
+
                             Button(role: .destructive) {
                                 showDeleteConfirmation = true
                             } label: {
                                 HStack(spacing: 12) {
                                     Image(systemName: "trash")
                                         .font(.system(size: 18))
+                                        .foregroundStyle(Color.red)
+                                        .frame(width: 28, alignment: .center)
                                     Text("Move to Trash")
                                         .font(.system(size: 17))
+                                        .foregroundStyle(Color.red)
+                                    Spacer()
                                 }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.vertical, 12)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 14)
                             }
                             .buttonStyle(.plain)
                         }
                     }
 
-                    // Word Count
-                    HStack {
-                        Text("Word Count")
-                            .font(.system(size: 17))
-                        Spacer()
-                        Text("\(viewModel.wordCount())")
-                            .font(.system(size: 17, weight: .medium))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
+                    // MARK: Footer: word count + last saved
+                    footerSection
                 }
                 .padding(20)
             }
             .background(Color(.systemGroupedBackground))
-            .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     HStack(spacing: 8) {
                         Image(systemName: "slider.horizontal.3")
-                            .font(.system(size: 18))
+                            .font(.system(size: 16, weight: .medium))
                         Text("Settings")
-                            .font(.headline)
+                            .font(.system(size: 17, weight: .semibold))
                     }
+                    .foregroundStyle(.primary)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") {
@@ -139,29 +121,121 @@ struct JournalSettingsSheet: View {
                     .foregroundStyle(Color.opennoteGreen)
                 }
             }
-            .sheet(isPresented: $showFrequencySheet) {
-                FrequencySheet(appSettings: appSettings, isPresented: $showFrequencySheet)
-            }
-            .sheet(isPresented: $showIntegrationsSheet) {
-                IntegrationsSheet(isPresented: $showIntegrationsSheet)
-            }
             .sheet(isPresented: $showVersionHistorySheet) {
                 VersionHistorySheet(isPresented: $showVersionHistorySheet, journal: journal)
             }
             .confirmationDialog("Move to Trash", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
-                Button("Move to Trash", role: .destructive) {
-                    performDelete()
-                }
+                Button("Move to Trash", role: .destructive) { performDelete() }
                 Button("Cancel", role: .cancel) {}
             } message: {
                 Text("This journal will be permanently deleted.")
             }
             .sheet(isPresented: $showShareSheet) {
-                if !shareItems.isEmpty {
-                    ShareSheet(items: shareItems)
+                if !shareItems.isEmpty { ShareSheet(items: shareItems) }
+            }
+        }
+    }
+
+    // MARK: Font section
+
+    private var fontSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Font")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 4)
+
+            VStack(spacing: 10) {
+                ForEach(AppSettings.EditorFont.allCases, id: \.rawValue) { font in
+                    Button {
+                        Haptics.selection()
+                        appSettings.editorFont = font
+                    } label: {
+                        HStack(spacing: 0) {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(font.rawValue)
+                                    .font(font == .serif
+                                          ? .system(size: 17, design: .serif)
+                                          : .system(size: 17))
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(.primary)
+                                Text(font.description)
+                                    .font(.system(size: 14))
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color(.secondarySystemGroupedBackground))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(
+                                            appSettings.editorFont == font
+                                                ? Color.opennoteGreen
+                                                : Color.clear,
+                                            lineWidth: 2
+                                        )
+                                )
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .animation(.easeOut(duration: 0.15), value: appSettings.editorFont)
                 }
             }
         }
+    }
+
+    // MARK: Footer
+
+    private var footerSection: some View {
+        VStack(spacing: 6) {
+            HStack {
+                Text("Word Count")
+                    .font(.system(size: 17))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(viewModel.wordCount())")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+            HStack {
+                Text("Last saved \(journal.lastEdited.relativeFormatted())")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.tertiary)
+                Spacer()
+            }
+        }
+        .padding(.horizontal, 4)
+    }
+
+    // MARK: Notes Recorder destination
+
+    private var recorderDestination: some View {
+        NotesRecorderSheet { text in
+            onInsertText?(text)
+            isPresented = false
+        }
+        .navigationTitle("Notes Recorder")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: 6) {
+                    Image(systemName: "waveform")
+                        .font(.system(size: 15, weight: .medium))
+                    Text("Notes Recorder")
+                        .font(.system(size: 17, weight: .semibold))
+                }
+            }
+        }
+    }
+
+    // MARK: Helpers
+
+    private var rowDivider: some View {
+        Divider().padding(.leading, 56)
     }
 
     private func settingsCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
@@ -172,37 +246,25 @@ struct JournalSettingsSheet: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
-    private func settingsRow(icon: String, title: String, subtitle: String? = nil, showChevron: Bool = false, @ViewBuilder trailing: () -> some View) -> some View {
-        HStack(alignment: .center, spacing: 12) {
+    private func settingsRow(icon: String, title: String) -> some View {
+        HStack(spacing: 12) {
             Image(systemName: icon)
                 .font(.system(size: 18))
                 .foregroundStyle(.secondary)
-                .frame(width: 24, alignment: .center)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 17))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .multilineTextAlignment(.leading)
-                if let sub = subtitle {
-                    Text(sub)
-                        .font(.system(size: 13))
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .multilineTextAlignment(.leading)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .layoutPriority(1)
-            trailing()
-            if showChevron {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color(.tertiaryLabel))
-            }
+                .frame(width: 28, alignment: .center)
+            Text(title)
+                .font(.system(size: 17))
+                .foregroundStyle(.primary)
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(Color(.tertiaryLabel))
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.vertical, 14)
     }
+
+    // MARK: Actions
 
     private func exportToMarkdown() {
         Haptics.impact(.light)
@@ -222,9 +284,7 @@ struct JournalSettingsSheet: View {
 
     private func cloneJournal() {
         Haptics.impact(.light)
-        let clonedBlocks = viewModel.blocks.map { b in
-            NoteBlock(orderIndex: b.orderIndex, blockType: b.blockType)
-        }
+        let clonedBlocks = viewModel.blocks.map { NoteBlock(orderIndex: $0.orderIndex, blockType: $0.blockType) }
         let newJournal = Journal(title: "\(journal.title) (Copy)")
         notesStore.pendingBlocksForJournalId[newJournal.id] = clonedBlocks
         notesStore.addJournal(newJournal)
@@ -240,7 +300,17 @@ struct JournalSettingsSheet: View {
     }
 }
 
-// MARK: - Sub-sheets
+// MARK: - Date helper
+
+private extension Date {
+    func relativeFormatted() -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        return formatter.localizedString(for: self, relativeTo: Date())
+    }
+}
+
+// MARK: - Version history sub-sheet
 
 private struct VersionHistorySheet: View {
     @Binding var isPresented: Bool
@@ -248,75 +318,69 @@ private struct VersionHistorySheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 16) {
+            VStack(spacing: 20) {
+                Spacer()
                 Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: 48))
+                    .font(.system(size: 52, weight: .light))
                     .foregroundStyle(.secondary)
-                Text("Version history")
-                    .font(.headline)
-                Text("Previous versions of your journal will appear here once versioning is enabled.")
-                    .font(.subheadline)
+                Text("Version History")
+                    .font(.system(size: 20, weight: .semibold))
+                Text("Previous versions will appear here.\nVersion snapshots are saved automatically as you write.")
+                    .font(.system(size: 15))
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
-                    .padding(.horizontal)
+                    .padding(.horizontal, 32)
+                Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(.systemGroupedBackground))
             .navigationTitle("Version history")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
-                        isPresented = false
-                    }
-                    .foregroundStyle(Color.opennoteGreen)
+                    Button("Done") { isPresented = false }
+                        .foregroundStyle(Color.opennoteGreen)
+                        .fontWeight(.semibold)
                 }
             }
         }
     }
 }
 
-// MARK: - PDF Export
+// MARK: - PDF Exporter
 
 private enum PDFExporter {
     static func export(markdown: String, title: String) -> Data {
-        let pdfMeta = [
-            kCGPDFContextCreator: "Opennote",
-            kCGPDFContextAuthor: "Opennote User"
-        ]
-        let format = UIGraphicsPDFRendererFormat()
-        format.documentInfo = pdfMeta as [String: Any]
-        let pageRect = CGRect(x: 0, y: 0, width: 612, height: 792) // US Letter
-        let renderer = UIGraphicsPDFRenderer(bounds: pageRect, format: format)
-
+        let pageRect = CGRect(x: 0, y: 0, width: 612, height: 792)
+        let renderer = UIGraphicsPDFRenderer(bounds: pageRect)
         return renderer.pdfData { context in
             context.beginPage()
-            let font = UIFont.systemFont(ofSize: 12)
             let titleFont = UIFont.boldSystemFont(ofSize: 18)
-            let attrs: [NSAttributedString.Key: Any] = [.font: font]
+            let bodyFont = UIFont.systemFont(ofSize: 12)
             let titleAttrs: [NSAttributedString.Key: Any] = [.font: titleFont]
-
-            var y: CGFloat = 40
+            let bodyAttrs: [NSAttributedString.Key: Any] = [.font: bodyFont]
             let margin: CGFloat = 50
             let width = pageRect.width - 2 * margin
+            var y: CGFloat = 40
 
-            // Title
             (title as NSString).draw(at: CGPoint(x: margin, y: y), withAttributes: titleAttrs)
-            y += 30
+            y += 34
 
-            // Body - simple line wrapping
-            let lines = markdown.components(separatedBy: .newlines)
-            for line in lines {
-                let text = (line as NSString)
-                let size = text.boundingRect(with: CGSize(width: width, height: .greatestFiniteMagnitude),
-                                             options: .usesLineFragmentOrigin, attributes: attrs, context: nil)
+            for line in markdown.components(separatedBy: .newlines) {
+                let text = line as NSString
+                let size = text.boundingRect(
+                    with: CGSize(width: width, height: .greatestFiniteMagnitude),
+                    options: .usesLineFragmentOrigin,
+                    attributes: bodyAttrs,
+                    context: nil
+                )
                 if y + size.height > pageRect.height - 50 {
                     context.beginPage()
                     y = 50
                 }
-                text.draw(in: CGRect(x: margin, y: y, width: width, height: size.height), withAttributes: attrs)
+                text.draw(in: CGRect(x: margin, y: y, width: width, height: size.height), withAttributes: bodyAttrs)
                 y += size.height + 4
             }
         }
     }
 }
-

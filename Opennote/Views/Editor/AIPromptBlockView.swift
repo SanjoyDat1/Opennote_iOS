@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct AIPromptBlockView: View {
     let command: String
@@ -8,6 +9,7 @@ struct AIPromptBlockView: View {
     @FocusState.Binding var focusedBlockId: UUID?
     let onUpdate: (String) -> Void
     let onRun: () -> Void
+    var onCancel: (() -> Void)? = nil
     var onAddToNotes: ((String) -> Void)? = nil
     var onClose: (() -> Void)? = nil
 
@@ -33,18 +35,23 @@ struct AIPromptBlockView: View {
                     .font(.system(size: 17, design: .default))
                     .disabled(isRunning)
                 Button {
-                    onRun()
+                    if isRunning {
+                        onCancel?()
+                    } else {
+                        onRun()
+                    }
                 } label: {
                     if isRunning {
-                        ProgressView()
-                            .scaleEffect(0.8)
+                        Image(systemName: "stop.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundStyle(.orange)
                     } else {
                         Image(systemName: "play.circle.fill")
                             .font(.system(size: 24))
                             .foregroundStyle(Color.opennoteGreen)
                     }
                 }
-                .disabled(command.trimmingCharacters(in: .whitespaces).isEmpty || isRunning)
+                .disabled(command.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .padding(12)
             .background(Color.opennoteLightGreen)
@@ -79,9 +86,29 @@ struct AIPromptBlockView: View {
                         .disabled(isRunning)
 
                         Button {
+                            UIPasteboard.general.string = response
+                            Haptics.selection()
+                        } label: {
+                            Label("Copy", systemImage: "doc.on.doc")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(Color.opennoteGreen)
+                        }
+                        .disabled(isRunning)
+
+                        if isRunning {
+                            Button {
+                                onCancel?()
+                            } label: {
+                                Label("Cancel", systemImage: "stop.fill")
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundStyle(.orange)
+                            }
+                        }
+
+                        Button {
                             onAddToNotes?(response)
                         } label: {
-                            Label("Add to notes", systemImage: "plus.circle.fill")
+                            Label("Insert into journal", systemImage: "plus.circle.fill")
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 16)

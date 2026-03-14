@@ -128,73 +128,65 @@ struct HomeView: View {
         allContent
     }
     
+    // MARK: Papers — compact horizontal scroll row
     private var papersSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
                 Text("Papers")
-                    .opennoteSectionHeader()
-                Text("\(papers.count)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(Color(.systemGray5))
-                    .clipShape(Capsule())
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.primary)
+                countBadge(papers.count)
                 Spacer()
             }
             .padding(.horizontal, 20)
-            
-            if viewMode == .grid {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    CreateCard(title: "Create paper", icon: "plus") {
-                        onCreatePaper()
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    // Create paper compact card
+                    Button { onCreatePaper() } label: {
+                        VStack(spacing: 6) {
+                            Image(systemName: "plus")
+                                .font(.system(size: 20, weight: .light))
+                                .foregroundStyle(Color(.systemGray3))
+                        }
+                        .frame(width: 120, height: 108)
+                        .background(Color(.systemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                                .foregroundStyle(Color(.systemGray3))
+                        )
                     }
+                    .buttonStyle(.plain)
+
                     ForEach(papers) { paper in
-                        PaperCard(
+                        PaperCompactCard(
                             paper: paper,
                             onTap: { onSelectPaper(paper) },
                             onDelete: { onDeletePaper?(paper.id) },
-                            onRename: onRenamePaper,
-                            onFavorite: onFavoritePaper
+                            onRename: onRenamePaper
                         )
                     }
                 }
-            } else {
-                VStack(spacing: 8) {
-                    CreateCardList(title: "Create paper", icon: "plus") {
-                        onCreatePaper()
-                    }
-                    ForEach(papers) { paper in
-                        PaperListRow(
-                            paper: paper,
-                            onTap: { onSelectPaper(paper) },
-                            onDelete: { onDeletePaper?(paper.id) },
-                            onRename: onRenamePaper,
-                            onFavorite: onFavoritePaper
-                        )
-                    }
-                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 4)
             }
         }
-        .padding(.horizontal, 20)
     }
-    
+
+    // MARK: Journals — full-width large cards (primary emphasis)
     private var journalsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            HStack(spacing: 6) {
                 Text("Journals")
-                    .opennoteSectionHeader()
-                Text("\(journals.count)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 2)
-                    .background(Color(.systemGray5))
-                    .clipShape(Capsule())
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(.primary)
+                countBadge(journals.count)
                 Spacer()
-                HStack(spacing: 4) {
-                    Text("Last edited (newest)")
-                        .font(.caption)
+                HStack(spacing: 3) {
+                    Text("Last edited")
+                        .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                     Image(systemName: "chevron.down")
                         .font(.system(size: 10, weight: .medium))
@@ -202,40 +194,51 @@ struct HomeView: View {
                 }
             }
             .padding(.horizontal, 20)
-            
-            if viewMode == .grid {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                    CreateCard(title: "Create journal", icon: "plus") {
-                        onCreateJournal()
-                    }
-                    ForEach(journals) { journal in
-                        JournalCard(
-                            journal: journal,
-                            onTap: { onSelectJournal(journal) },
-                            onDelete: { onDeleteJournal?(journal.id) },
-                            onRename: onRenameJournal,
-                            onFavorite: onFavoriteJournal
-                        )
-                    }
+
+            // Create journal — large hero card
+            Button { onCreateJournal() } label: {
+                ZStack {
+                    Image(systemName: "plus")
+                        .font(.system(size: 32, weight: .ultraLight))
+                        .foregroundStyle(Color(.systemGray3))
                 }
-            } else {
-                VStack(spacing: 8) {
-                    CreateCardList(title: "Create journal", icon: "plus") {
-                        onCreateJournal()
-                    }
-                    ForEach(journals) { journal in
-                        JournalListRow(
-                            journal: journal,
-                            onTap: { onSelectJournal(journal) },
-                            onDelete: { onDeleteJournal?(journal.id) },
-                            onRename: onRenameJournal,
-                            onFavorite: onFavoriteJournal
-                        )
-                    }
+                .frame(maxWidth: .infinity)
+                .frame(height: journals.isEmpty ? 280 : 220)
+                .background(Color(.systemBackground).opacity(0.7))
+                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20)
+                        .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [7, 5]))
+                        .foregroundStyle(Color(.systemGray3))
+                )
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 20)
+
+            // Existing journal cards
+            VStack(spacing: 12) {
+                ForEach(journals) { journal in
+                    JournalLargeCard(
+                        journal: journal,
+                        onTap: { onSelectJournal(journal) },
+                        onDelete: { onDeleteJournal?(journal.id) },
+                        onRename: onRenameJournal,
+                        onFavorite: onFavoriteJournal
+                    )
                 }
             }
+            .padding(.horizontal, 20)
         }
-        .padding(.horizontal, 20)
+    }
+
+    private func countBadge(_ count: Int) -> some View {
+        Text("\(count)")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Color(.systemGray5))
+            .clipShape(Capsule())
     }
 }
 
@@ -690,9 +693,205 @@ struct JournalListRow: View {
     }
 }
 
+// MARK: - Paper compact card (horizontal row)
+
+struct PaperCompactCard: View {
+    let paper: Paper
+    let onTap: () -> Void
+    var onDelete: (() -> Void)?
+    var onRename: ((Paper) -> Void)?
+
+    @State private var showRenameAlert = false
+    @State private var renameText = ""
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top) {
+                    Image(systemName: "doc.text.fill")
+                        .font(.system(size: 15, weight: .light))
+                        .foregroundStyle(Color(.systemGray3))
+                    Spacer()
+                    if let onDelete {
+                        Button {
+                            Haptics.impact(.light)
+                            onDelete()
+                        } label: {
+                            Image(systemName: "trash.fill")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(.white)
+                                .frame(width: 24, height: 24)
+                                .background(Color.red.opacity(0.82))
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                Spacer(minLength: 8)
+
+                Text(paper.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+
+                Text(paper.lastEdited, style: .date)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 2)
+            }
+            .padding(12)
+            .frame(width: 132, height: 108)
+            .background(Color(.systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .shadow(color: .black.opacity(0.06), radius: 6, x: 0, y: 2)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            if onRename != nil {
+                Button("Rename") { renameText = paper.title; showRenameAlert = true }
+            }
+            if let onDelete {
+                Button(role: .destructive) { onDelete() } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        }
+        .alert("Rename Paper", isPresented: $showRenameAlert) {
+            TextField("Title", text: $renameText)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
+                var updated = paper
+                updated.title = renameText.isEmpty ? "Untitled Paper" : renameText
+                onRename?(updated)
+            }
+        }
+    }
+}
+
+// MARK: - Journal large card (full-width, primary emphasis)
+
+struct JournalLargeCard: View {
+    let journal: Journal
+    let onTap: () -> Void
+    var onDelete: (() -> Void)?
+    var onRename: ((Journal) -> Void)?
+    var onFavorite: ((Journal) -> Void)?
+
+    @State private var showRenameAlert = false
+    @State private var renameText = ""
+
+    var body: some View {
+        Button(action: onTap) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(journal.title)
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
+                        Text(journal.lastEdited, style: .date)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Menu {
+                        if onRename != nil {
+                            Button("Rename") {
+                                renameText = journal.title
+                                showRenameAlert = true
+                            }
+                        }
+                        if let onFavorite {
+                            Button {
+                                var updated = journal
+                                updated.isFavorite.toggle()
+                                onFavorite(updated)
+                            } label: {
+                                Label(
+                                    journal.isFavorite ? "Remove from Favorites" : "Add to Favorites",
+                                    systemImage: journal.isFavorite ? "star.slash" : "star"
+                                )
+                            }
+                        }
+                        if let onDelete {
+                            Button(role: .destructive) { onDelete() } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 32, height: 32)
+                            .background(Color(.systemGray6))
+                            .clipShape(Circle())
+                    }
+                }
+
+                // Spacer gives the card vertical weight — like a real notebook page
+                Spacer(minLength: 48)
+
+                HStack {
+                    if journal.isFavorite {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Color.opennoteGreen)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color(.systemGray3))
+                }
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity, minHeight: 140, alignment: .topLeading)
+            .background(Color(.systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 3)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            if onRename != nil {
+                Button("Rename") { renameText = journal.title; showRenameAlert = true }
+            }
+            if let onFavorite {
+                Button {
+                    var updated = journal
+                    updated.isFavorite.toggle()
+                    onFavorite(updated)
+                } label: {
+                    Label(
+                        journal.isFavorite ? "Remove from Favorites" : "Add to Favorites",
+                        systemImage: journal.isFavorite ? "star.slash" : "star"
+                    )
+                }
+            }
+            if let onDelete {
+                Button(role: .destructive) { onDelete() } label: {
+                    Label("Delete", systemImage: "trash")
+                }
+            }
+        }
+        .alert("Rename Journal", isPresented: $showRenameAlert) {
+            TextField("Title", text: $renameText)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") {
+                var updated = journal
+                updated.title = renameText.isEmpty ? "Untitled Journal" : renameText
+                onRename?(updated)
+            }
+        }
+    }
+}
+
 #Preview {
     HomeView(
-        journals: [Journal(title: "My First Journal")],
+        journals: [
+            Journal(title: "Biology 101"),
+            Journal(title: "Physics Notes")
+        ],
         papers: [Paper(title: "Untitled Paper")],
         onCreateJournal: {},
         onCreatePaper: {},

@@ -1,57 +1,55 @@
 import SwiftUI
 
 /// A slash command for the "/" command palette in the journal editor.
+/// Only commands that are 100% implemented are listed here.
 struct SlashCommand: Identifiable {
     let id: String
     let title: String
-    let subtitle: String?
-    let icon: String
-    var assetImage: String? = nil
+    let icon: String          // SF Symbol name
+    var assetImage: String?   // Asset catalog image name (overrides icon)
     let section: SlashCommandSection
 
     enum SlashCommandSection: String, CaseIterable {
-        case formatting = "Formatting"
+        case basic    = "Basic editing"
         case advanced = "Advanced editing"
-        case media = "Media"
-        case ai = "AI with Feynman"
-        case journals = "Journals"
+        case media    = "Media"
+        case ai       = "Build with Feynman"
     }
 }
 
 extension SlashCommand {
     static let allCommands: [SlashCommand] = [
-        // Formatting
-        SlashCommand(id: "text", title: "Text", subtitle: nil, icon: "textformat", section: .formatting),
-        SlashCommand(id: "h1", title: "Heading 1", subtitle: nil, icon: "textformat.size.larger", section: .formatting),
-        SlashCommand(id: "h2", title: "Heading 2", subtitle: nil, icon: "textformat.size", section: .formatting),
-        SlashCommand(id: "h3", title: "Heading 3", subtitle: nil, icon: "textformat.size.smaller", section: .formatting),
-        SlashCommand(id: "bullet", title: "Bullet list", subtitle: nil, icon: "list.bullet", section: .formatting),
-        SlashCommand(id: "numbered", title: "Numbered list", subtitle: nil, icon: "list.number", section: .formatting),
-        SlashCommand(id: "checklist", title: "Checklist", subtitle: nil, icon: "checklist", section: .formatting),
-        SlashCommand(id: "quote", title: "Quote", subtitle: nil, icon: "quote.closing", section: .formatting),
-        SlashCommand(id: "divider", title: "Divider", subtitle: nil, icon: "minus", section: .formatting),
-        // Advanced
-        SlashCommand(id: "code", title: "Code block", subtitle: "⌘⌥C", icon: "chevron.left.forwardslash.chevron.right", section: .advanced),
-        SlashCommand(id: "latex", title: "LaTeX block", subtitle: nil, icon: "function", section: .advanced),
-        SlashCommand(id: "graph", title: "Graph (Desmos)", subtitle: nil, icon: "chart.line.uptrend.xyaxis", section: .advanced),
-        SlashCommand(id: "math", title: "Math equation", subtitle: nil, icon: "x.squareroot", section: .advanced),
-        // Media
-        SlashCommand(id: "image", title: "Image", subtitle: nil, icon: "photo", section: .media),
-        SlashCommand(id: "photo_to_text", title: "Photo to text", subtitle: "Notes & whiteboards → text", icon: "camera.viewfinder", section: .media),
-        // AI
-        SlashCommand(id: "ask_feynman", title: "Ask Feynman", subtitle: "Ask anything", icon: "paperplane.fill", assetImage: "logo", section: .ai),
-        SlashCommand(id: "flashcards", title: "Make flashcards", subtitle: "AI generates from your notes", icon: "rectangle.stack.fill.badge.plus", section: .ai),
-        SlashCommand(id: "practice", title: "Make practice problems", subtitle: "AI generates problems", icon: "questionmark.circle.fill", section: .ai),
-        // Journals (placeholders for future)
-        SlashCommand(id: "subjournal", title: "Subjournal", subtitle: nil, icon: "book.closed", section: .journals),
-        SlashCommand(id: "link_journal", title: "Link to existing journal", subtitle: nil, icon: "link", section: .journals),
+
+        // MARK: Basic editing
+        SlashCommand(id: "text",      title: "Text",           icon: "character.textbox",           section: .basic),
+        SlashCommand(id: "h1",        title: "Heading 1",      icon: "textformat.size.larger",       section: .basic),
+        SlashCommand(id: "h2",        title: "Heading 2",      icon: "textformat.size",              section: .basic),
+        SlashCommand(id: "h3",        title: "Heading 3",      icon: "textformat.size.smaller",      section: .basic),
+        SlashCommand(id: "bullet",    title: "Bullet list",    icon: "list.bullet",                  section: .basic),
+        SlashCommand(id: "numbered",  title: "Numbered list",  icon: "list.number",                  section: .basic),
+        SlashCommand(id: "checklist", title: "Checklist",      icon: "checklist",                    section: .basic),
+        SlashCommand(id: "quote",     title: "Quote",          icon: "quote.closing",                section: .basic),
+        SlashCommand(id: "divider",   title: "Divider",        icon: "minus",                        section: .basic),
+
+        // MARK: Advanced editing
+        SlashCommand(id: "code",      title: "Code block",     icon: "chevron.left.forwardslash.chevron.right", section: .advanced),
+        SlashCommand(id: "math",      title: "Math / LaTeX",   icon: "x.squareroot",                section: .advanced),
+        SlashCommand(id: "graph",     title: "Graph",          icon: "chart.line.uptrend.xyaxis",    section: .advanced),
+
+        // MARK: Media
+        SlashCommand(id: "scan_notes",  title: "Scan notes",   icon: "camera.viewfinder",            section: .media),
+        SlashCommand(id: "voice_note",  title: "Voice note",   icon: "mic.fill",                     section: .media),
+
+        // MARK: Build with Feynman
+        SlashCommand(id: "ask_feynman", title: "Ask Feynman",         icon: "sparkles",    assetImage: "logo", section: .ai),
+        SlashCommand(id: "flashcards",  title: "Generate flashcards", icon: "rectangle.stack.fill",           section: .ai),
+        SlashCommand(id: "practice",    title: "Practice problems",   icon: "pencil.and.list.clipboard",      section: .ai),
     ]
 
+    /// Returns true when the command title loosely matches a search string.
     func matches(filter: String) -> Bool {
         guard !filter.isEmpty else { return true }
-        let lower = filter.lowercased()
-        return title.lowercased().contains(lower) ||
-            section.rawValue.lowercased().contains(lower) ||
-            (subtitle?.lowercased().contains(lower) ?? false)
+        let q = filter.lowercased()
+        return title.lowercased().contains(q) || section.rawValue.lowercased().contains(q)
     }
 }

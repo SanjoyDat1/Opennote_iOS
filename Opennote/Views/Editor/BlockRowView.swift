@@ -68,7 +68,8 @@ struct BlockRowView: View {
                     isRunning: viewModel.runningAIBlockId == block.id,
                     focusedBlockId: $focusedBlockId,
                     onUpdate: { viewModel.updateBlock(id: block.id, blockType: .aiPrompt(command: $0, response: response)) },
-                    onRun: { Task { await runFeynman(blockId: block.id) } },
+                    onRun: { viewModel.startAIBlock(blockId: block.id) },
+                    onCancel: { viewModel.cancelAIBlock(blockId: block.id) },
                     onAddToNotes: { text in
                         let newBlock = NoteBlock(orderIndex: 0, blockType: .paragraph(text))
                         viewModel.insertBlock(after: block.id, newBlock: newBlock)
@@ -142,10 +143,6 @@ struct BlockRowView: View {
                 Label("Delete Block", systemImage: "trash")
             }
         }
-    }
-
-    private func runFeynman(blockId: UUID) async {
-        await viewModel.runAIBlock(blockId: blockId)
     }
 
     private func generateFlashcards(blockId: UUID) async {

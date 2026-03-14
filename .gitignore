@@ -25,3 +25,4 @@ xcuserdata/
 
 # API keys (use OpenAIConfig.example.swift as template)
 Opennote/Config/OpenAIConfig.swift
+Config.plist

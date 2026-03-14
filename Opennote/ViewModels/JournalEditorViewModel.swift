@@ -5,6 +5,7 @@ final class JournalEditorViewModel {
     var blocks: [NoteBlock]
     var journalTitle: String
     var runningAIBlockId: UUID?
+    private var aiTasks: [UUID: Task<Void, Never>] = [:]
 
     init(journalTitle: String, blocks: [NoteBlock]? = nil) {
         self.journalTitle = journalTitle
@@ -184,7 +185,27 @@ final class JournalEditorViewModel {
 
     /// Run Feynman AI on an AI prompt block. Streams response into the block's output area only.
     @MainActor
-    func runAIBlock(blockId: UUID) async {
+    func startAIBlock(blockId: UUID, mode: FeynmanMode = .explain) {
+        cancelAIBlock(blockId: blockId)
+        let task = Task<Void, Never> { [weak self] in
+            guard let self else { return }
+            await self.runAIBlock(blockId: blockId, mode: mode)
+        }
+        aiTasks[blockId] = task
+    }
+
+    @MainActor
+    func cancelAIBlock(blockId: UUID) {
+        aiTasks[blockId]?.cancel()
+        aiTasks.removeValue(forKey: blockId)
+        if runningAIBlockId == blockId {
+            runningAIBlockId = nil
+        }
+    }
+
+    /// Run Feynman AI on an AI prompt block. Streams response into the block's output area only.
+    @MainActor
+    func runAIBlock(blockId: UUID, mode: FeynmanMode = .explain) async {
         guard let idx = blocks.firstIndex(where: { $0.id == blockId }) else { return }
         let block = blocks[idx]
         guard case .aiPrompt(let command, _) = block.blockType,
@@ -204,13 +225,21 @@ final class JournalEditorViewModel {
         let messages: [[String: String]] = [["role": "user", "content": command]]
 
         do {
-            for try await delta in openAI.streamChat(messages: messages, systemContext: blocksToMarkdown()) {
+            for try await delta in openAI.streamChat(messages: messages, systemContext: blocksToMarkdown(), mode: mode) {
+                if Task.isCancelled { throw CancellationError() }
                 streamedContent += delta
+                updateBlock(id: blockId, blockType: .aiPrompt(command: command, response: streamedContent))
+            }
+        } catch is CancellationError {
+            if streamedContent.isEmpty {
+                updateBlock(id: blockId, blockType: .aiPrompt(command: command, response: "Generation stopped."))
+            } else {
                 updateBlock(id: blockId, blockType: .aiPrompt(command: command, response: streamedContent))
             }
         } catch {
             updateBlock(id: blockId, blockType: .aiPrompt(command: command, response: "Error: \(error.localizedDescription)"))
         }
+        aiTasks.removeValue(forKey: blockId)
     }
 
     private func reindex(_ blocks: [NoteBlock]) -> [NoteBlock] {

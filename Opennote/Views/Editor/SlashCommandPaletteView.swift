@@ -1,113 +1,102 @@
 import SwiftUI
 
-/// Scrollable slash command palette shown when user types "/" in the journal editor.
+// MARK: - Slash Command Palette
+//
+// Appears as a floating card when the user types "/" in the journal.
+// Matches the Notion-style design: section labels → plain rows → icon in gray rounded square.
+// Palette shows ONLY when the user types "/" exactly — further typing dismisses it.
+
 struct SlashCommandPaletteView: View {
-    let filter: String
     let onSelect: (SlashCommand) -> Void
 
-    private var filteredCommands: [(section: SlashCommand.SlashCommandSection, commands: [SlashCommand])] {
-        let filtered = SlashCommand.allCommands.filter { $0.matches(filter: filter) }
-        let grouped = Dictionary(grouping: filtered, by: { $0.section })
+    // Groups by section in the declared order
+    private var groups: [(section: SlashCommand.SlashCommandSection, commands: [SlashCommand])] {
+        let all = SlashCommand.allCommands
         return SlashCommand.SlashCommandSection.allCases.compactMap { section in
-            guard let cmds = grouped[section], !cmds.isEmpty else { return nil }
-            return (section, cmds)
+            let cmds = all.filter { $0.section == section }
+            return cmds.isEmpty ? nil : (section, cmds)
         }
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                Image(systemName: "slash")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.secondary)
-                Text("Commands")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.primary)
-                Spacer()
-                Text("Type to filter")
-                    .font(.system(size: 13))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(Color(.systemGray6))
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    ForEach(filteredCommands, id: \.section.rawValue) { group in
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text(group.section.rawValue)
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(.secondary)
-                                .textCase(.uppercase)
-                                .padding(.horizontal, 4)
-
-                            VStack(spacing: 0) {
-                                ForEach(group.commands) { cmd in
-                                    Button {
-                                        Haptics.selection()
-                                        onSelect(cmd)
-                                    } label: {
-                                        HStack(spacing: 12) {
-                                            Group {
-                                                if let asset = cmd.assetImage {
-                                                    Image(asset)
-                                                        .resizable()
-                                                        .scaledToFit()
-                                                } else {
-                                                    Image(systemName: cmd.icon)
-                                                        .font(.system(size: 16, weight: .medium))
-                                                }
-                                            }
-                                            .foregroundStyle(cmd.section == .ai ? Color.opennoteGreen : .secondary)
-                                            .frame(width: 24, height: 24, alignment: .center)
-
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text(cmd.title)
-                                                    .font(.system(size: 16, weight: .medium))
-                                                    .foregroundStyle(.primary)
-                                                if let sub = cmd.subtitle {
-                                                    Text(sub)
-                                                        .font(.system(size: 13))
-                                                        .foregroundStyle(.secondary)
-                                                }
-                                            }
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-
-                                            if let shortcut = cmd.subtitle, cmd.section == .advanced, shortcut.hasPrefix("⌘") {
-                                                Text(shortcut)
-                                                    .font(.system(size: 12, weight: .medium))
-                                                    .foregroundStyle(.tertiary)
-                                                    .padding(.horizontal, 6)
-                                                    .padding(.vertical, 4)
-                                                    .background(Color(.systemGray5))
-                                                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                                            }
-                                        }
-                                        .padding(.horizontal, 16)
-                                        .padding(.vertical, 12)
-                                        .contentShape(Rectangle())
-                                    }
-                                    .buttonStyle(.plain)
-
-                                    if cmd.id != group.commands.last?.id {
-                                        Divider()
-                                            .padding(.leading, 52)
-                                    }
-                                }
-                            }
-                            .background(Color(.secondarySystemGroupedBackground))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(groups, id: \.section.rawValue) { group in
+                    sectionHeader(group.section.rawValue)
+                    ForEach(Array(group.commands.enumerated()), id: \.element.id) { index, cmd in
+                        commandRow(cmd, isFirst: index == 0 && group.section == .basic)
+                        if index < group.commands.count - 1 {
+                            Divider()
+                                .padding(.leading, 58)
+                                .opacity(0.6)
                         }
                     }
                 }
-                .padding(16)
             }
-            .frame(maxHeight: 320)
+            .padding(.bottom, 8)
         }
-        .background(Color(.systemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 8)
+        .frame(maxHeight: 420)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .shadow(color: .black.opacity(0.13), radius: 24, x: 0, y: 8)
+    }
+
+    // MARK: Section header
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(Color(.systemGray))
+            .padding(.horizontal, 16)
+            .padding(.top, 18)
+            .padding(.bottom, 6)
+    }
+
+    // MARK: Command row
+    private func commandRow(_ cmd: SlashCommand, isFirst: Bool) -> some View {
+        Button {
+            Haptics.selection()
+            onSelect(cmd)
+        } label: {
+            HStack(spacing: 14) {
+                // Icon in rounded-square container
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(
+                            cmd.section == .ai
+                                ? Color.opennoteLightGreen.opacity(0.6)
+                                : Color(.systemGray5)
+                        )
+                        .frame(width: 34, height: 34)
+
+                    Group {
+                        if let asset = cmd.assetImage {
+                            Image(asset)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 18, height: 18)
+                        } else {
+                            Image(systemName: cmd.icon)
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(
+                                    cmd.section == .ai
+                                        ? Color.opennoteGreen
+                                        : Color(.label)
+                                )
+                        }
+                    }
+                }
+
+                Text(cmd.title)
+                    .font(.system(size: 17, weight: .regular))
+                    .foregroundStyle(.primary)
+
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(isFirst ? Color(.systemGray6) : Color.clear)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }

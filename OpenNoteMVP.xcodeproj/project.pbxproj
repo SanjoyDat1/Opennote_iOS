@@ -26,7 +26,7 @@
 		B2000010 /* JournalEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000110 /* JournalEditorView.swift */; };
 		B2000011 /* NoteBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000111 /* NoteBlock.swift */; };
 		B2000012 /* JournalEditorViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000112 /* JournalEditorViewModel.swift */; };
-		B2000013 /* BlockRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000113 /* BlockRowView.swift */; };
+		B2000049 /* BlockRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000113 /* BlockRowView.swift */; };
 		B2000014 /* ParagraphBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000114 /* ParagraphBlockView.swift */; };
 		B2000015 /* HeadingBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000115 /* HeadingBlockView.swift */; };
 		B2000016 /* BulletListBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000116 /* BulletListBlockView.swift */; };
@@ -58,6 +58,32 @@
 		B2000033 /* FlashcardBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000133 /* FlashcardBlockView.swift */; };
 		B2000034 /* PracticeProblemsBlockView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000134 /* PracticeProblemsBlockView.swift */; };
 		B2000035 /* PhotoToTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000135 /* PhotoToTextView.swift */; };
+		B2000036 /* InsertionMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000144 /* InsertionMode.swift */; };
+		B2000037 /* ScanSessionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000145 /* ScanSessionModel.swift */; };
+		B2000038 /* ImagePreprocessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000146 /* ImagePreprocessor.swift */; };
+		B2000039 /* DocumentScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000147 /* DocumentScannerView.swift */; };
+		B200003A /* ScanResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000148 /* ScanResultView.swift */; };
+		B200003B /* PhotoToTextButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000149 /* PhotoToTextButton.swift */; };
+		B200003C /* VisionOCRService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200014A /* VisionOCRService.swift */; };
+		B200003D /* OpenAIVisionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200014B /* OpenAIVisionService.swift */; };
+		B200003E /* KeyboardDismissAccessory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200014C /* KeyboardDismissAccessory.swift */; };
+		B200003F /* FeynmanChatBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200014D /* FeynmanChatBar.swift */; };
+		B2000040 /* FeynmanChatBarViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200014E /* FeynmanChatBarViewModel.swift */; };
+		B2000041 /* FeynmanPlusSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200014F /* FeynmanPlusSheet.swift */; };
+		B2000042 /* FeynmanModeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000150 /* FeynmanModeSheet.swift */; };
+		B2000043 /* FeynmanInsertFromJournalSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000151 /* FeynmanInsertFromJournalSheet.swift */; };
+		B2000044 /* DocumentPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000152 /* DocumentPickerView.swift */; };
+		B2000045 /* CameraImagePickerForBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000153 /* CameraImagePickerForBar.swift */; };
+		B2000046 /* SpeechToTextService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000154 /* SpeechToTextService.swift */; };
+		B2000047 /* VoiceInputSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000155 /* VoiceInputSheet.swift */; };
+		B2000048 /* JournalKeyboardAccessory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000156 /* JournalKeyboardAccessory.swift */; };
+		B2000157 /* KeyboardObserver.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000159 /* KeyboardObserver.swift */; };
+		B2000158 /* ParagraphTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200015A /* ParagraphTextView.swift */; };
+		B2000162 /* ListItemField.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000163 /* ListItemField.swift */; };
+		B200005A /* FeynmanChatMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200015B /* FeynmanChatMessage.swift */; };
+		B200005B /* FeynmanConversationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200015C /* FeynmanConversationViewModel.swift */; };
+		B200005C /* FeynmanChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200015D /* FeynmanChatView.swift */; };
+		B2000059 /* NotesRecorderSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200015E /* NotesRecorderSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -112,6 +138,32 @@
 		B2000133 /* FlashcardBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlashcardBlockView.swift; sourceTree = "<group>"; };
 		B2000134 /* PracticeProblemsBlockView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PracticeProblemsBlockView.swift; sourceTree = "<group>"; };
 		B2000135 /* PhotoToTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoToTextView.swift; sourceTree = "<group>"; };
+		B2000144 /* InsertionMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsertionMode.swift; sourceTree = "<group>"; };
+		B2000145 /* ScanSessionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanSessionModel.swift; sourceTree = "<group>"; };
+		B2000146 /* ImagePreprocessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImagePreprocessor.swift; sourceTree = "<group>"; };
+		B2000147 /* DocumentScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentScannerView.swift; sourceTree = "<group>"; };
+		B2000148 /* ScanResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanResultView.swift; sourceTree = "<group>"; };
+		B2000149 /* PhotoToTextButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoToTextButton.swift; sourceTree = "<group>"; };
+		B200014A /* VisionOCRService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionOCRService.swift; sourceTree = "<group>"; };
+		B200014B /* OpenAIVisionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIVisionService.swift; sourceTree = "<group>"; };
+		B200014C /* KeyboardDismissAccessory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardDismissAccessory.swift; sourceTree = "<group>"; };
+		B200014D /* FeynmanChatBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeynmanChatBar.swift; sourceTree = "<group>"; };
+		B200014E /* FeynmanChatBarViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeynmanChatBarViewModel.swift; sourceTree = "<group>"; };
+		B200014F /* FeynmanPlusSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeynmanPlusSheet.swift; sourceTree = "<group>"; };
+		B2000150 /* FeynmanModeSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeynmanModeSheet.swift; sourceTree = "<group>"; };
+		B2000151 /* FeynmanInsertFromJournalSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeynmanInsertFromJournalSheet.swift; sourceTree = "<group>"; };
+		B2000152 /* DocumentPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentPickerView.swift; sourceTree = "<group>"; };
+		B2000153 /* CameraImagePickerForBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraImagePickerForBar.swift; sourceTree = "<group>"; };
+		B2000154 /* SpeechToTextService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechToTextService.swift; sourceTree = "<group>"; };
+		B2000155 /* VoiceInputSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceInputSheet.swift; sourceTree = "<group>"; };
+		B2000156 /* JournalKeyboardAccessory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JournalKeyboardAccessory.swift; sourceTree = "<group>"; };
+		B2000159 /* KeyboardObserver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardObserver.swift; sourceTree = "<group>"; };
+		B200015A /* ParagraphTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParagraphTextView.swift; sourceTree = "<group>"; };
+		B2000163 /* ListItemField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ListItemField.swift; sourceTree = "<group>"; };
+		B200015B /* FeynmanChatMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeynmanChatMessage.swift; sourceTree = "<group>"; };
+		B200015C /* FeynmanConversationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeynmanConversationViewModel.swift; sourceTree = "<group>"; };
+		B200015D /* FeynmanChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeynmanChatView.swift; sourceTree = "<group>"; };
+		B200015E /* NotesRecorderSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotesRecorderSheet.swift; sourceTree = "<group>"; };
 		B2000130 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -141,12 +193,33 @@
 				B2000130 /* Assets.xcassets */,
 				B200020A /* Config */,
 				B2000202 /* DesignSystem */,
+				B200020D /* Features */,
 				B2000203 /* Models */,
 				B200020B /* Services */,
 				B2000204 /* ViewModels */,
 				B2000205 /* Views */,
 			);
 			path = Opennote;
+			sourceTree = "<group>";
+		};
+		B200020D /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				B200020E /* PhotoToText */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		B200020E /* PhotoToText */ = {
+			isa = PBXGroup;
+			children = (
+				B2000145 /* ScanSessionModel.swift */,
+				B2000146 /* ImagePreprocessor.swift */,
+				B2000147 /* DocumentScannerView.swift */,
+				B2000148 /* ScanResultView.swift */,
+				B2000149 /* PhotoToTextButton.swift */,
+			);
+			path = PhotoToText;
 			sourceTree = "<group>";
 		};
 		B2000201 /* App */ = {
@@ -165,6 +238,14 @@
 				B2000104 /* CardStyle.swift */,
 				B200011E /* Haptics.swift */,
 				B2000120 /* Toast.swift */,
+				B200014C /* KeyboardDismissAccessory.swift */,
+				B2000156 /* JournalKeyboardAccessory.swift */,
+				B200014D /* FeynmanChatBar.swift */,
+				B200014F /* FeynmanPlusSheet.swift */,
+				B2000150 /* FeynmanModeSheet.swift */,
+				B2000151 /* FeynmanInsertFromJournalSheet.swift */,
+				B2000152 /* DocumentPickerView.swift */,
+				B2000153 /* CameraImagePickerForBar.swift */,
 			);
 			path = DesignSystem;
 			sourceTree = "<group>";
@@ -172,6 +253,7 @@
 		B2000203 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				B2000144 /* InsertionMode.swift */,
 				B2000105 /* Journal.swift */,
 				B2000106 /* Paper.swift */,
 				B2000111 /* NoteBlock.swift */,
@@ -179,6 +261,7 @@
 				B200011F /* NotesStore.swift */,
 				B2000124 /* PaperTemplate.swift */,
 				B2000126 /* AppSettings.swift */,
+				B200015B /* FeynmanChatMessage.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -188,6 +271,8 @@
 			children = (
 				B2000107 /* AppViewModel.swift */,
 				B2000112 /* JournalEditorViewModel.swift */,
+				B200014E /* FeynmanChatBarViewModel.swift */,
+				B200015C /* FeynmanConversationViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -247,8 +332,11 @@
 			isa = PBXGroup;
 			children = (
 				B2000110 /* JournalEditorView.swift */,
-				B200011C /* PaperEditorView.swift */,
 				B2000113 /* BlockRowView.swift */,
+				B200015A /* ParagraphTextView.swift */,
+				B2000163 /* ListItemField.swift */,
+				B200015D /* FeynmanChatView.swift */,
+				B200011C /* PaperEditorView.swift */,
 				B2000114 /* ParagraphBlockView.swift */,
 				B2000115 /* HeadingBlockView.swift */,
 				B2000116 /* BulletListBlockView.swift */,
@@ -267,6 +355,8 @@
 				B2000123 /* JournalSettingsSheet.swift */,
 				B2000125 /* PaperSettingsSheet.swift */,
 				B2000127 /* SettingsComponents.swift */,
+				B2000155 /* VoiceInputSheet.swift */,
+				B200015E /* NotesRecorderSheet.swift */,
 			);
 			path = Editor;
 			sourceTree = "<group>";
@@ -283,7 +373,11 @@
 			isa = PBXGroup;
 			children = (
 				B200011B /* OpenAIService.swift */,
+				B2000159 /* KeyboardObserver.swift */,
 				B200012A /* CodeExecutionService.swift */,
+				B200014A /* VisionOCRService.swift */,
+				B200014B /* OpenAIVisionService.swift */,
+				B2000154 /* SpeechToTextService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -375,8 +469,14 @@
 				B2000010 /* JournalEditorView.swift in Sources */,
 				B2000011 /* NoteBlock.swift in Sources */,
 				B2000012 /* JournalEditorViewModel.swift in Sources */,
-				B2000013 /* BlockRowView.swift in Sources */,
+				B2000049 /* BlockRowView.swift in Sources */,
 				B2000014 /* ParagraphBlockView.swift in Sources */,
+				B2000157 /* KeyboardObserver.swift in Sources */,
+				B2000158 /* ParagraphTextView.swift in Sources */,
+				B2000162 /* ListItemField.swift in Sources */,
+				B200005A /* FeynmanChatMessage.swift in Sources */,
+				B200005B /* FeynmanConversationViewModel.swift in Sources */,
+				B200005C /* FeynmanChatView.swift in Sources */,
 				B2000015 /* HeadingBlockView.swift in Sources */,
 				B2000016 /* BulletListBlockView.swift in Sources */,
 				B2000017 /* NumberedListBlockView.swift in Sources */,
@@ -406,6 +506,26 @@
 				B2000033 /* FlashcardBlockView.swift in Sources */,
 				B2000034 /* PracticeProblemsBlockView.swift in Sources */,
 				B2000035 /* PhotoToTextView.swift in Sources */,
+				B2000036 /* InsertionMode.swift in Sources */,
+				B2000037 /* ScanSessionModel.swift in Sources */,
+				B2000038 /* ImagePreprocessor.swift in Sources */,
+				B2000039 /* DocumentScannerView.swift in Sources */,
+				B200003A /* ScanResultView.swift in Sources */,
+				B200003B /* PhotoToTextButton.swift in Sources */,
+				B200003C /* VisionOCRService.swift in Sources */,
+				B200003D /* OpenAIVisionService.swift in Sources */,
+				B200003E /* KeyboardDismissAccessory.swift in Sources */,
+				B200003F /* FeynmanChatBar.swift in Sources */,
+				B2000040 /* FeynmanChatBarViewModel.swift in Sources */,
+				B2000041 /* FeynmanPlusSheet.swift in Sources */,
+				B2000042 /* FeynmanModeSheet.swift in Sources */,
+				B2000043 /* FeynmanInsertFromJournalSheet.swift in Sources */,
+				B2000044 /* DocumentPickerView.swift in Sources */,
+				B2000045 /* CameraImagePickerForBar.swift in Sources */,
+				B2000046 /* SpeechToTextService.swift in Sources */,
+				B2000047 /* VoiceInputSheet.swift in Sources */,
+				B2000059 /* NotesRecorderSheet.swift in Sources */,
+				B2000048 /* JournalKeyboardAccessory.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -497,6 +617,10 @@
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Opennote needs camera access to scan your handwritten notes and whiteboards.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Opennote uses the microphone for voice input when you tap the microphone button.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Opennote needs photo library access so you can import existing photos of your notes.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Opennote uses speech recognition to convert your voice to text in the Feynman chat bar.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -528,6 +652,10 @@
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Opennote needs camera access to scan your handwritten notes and whiteboards.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Opennote uses the microphone for voice input when you tap the microphone button.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Opennote needs photo library access so you can import existing photos of your notes.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Opennote uses speech recognition to convert your voice to text in the Feynman chat bar.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (

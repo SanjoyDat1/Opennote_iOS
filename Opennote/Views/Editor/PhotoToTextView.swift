@@ -80,13 +80,16 @@ struct PhotoToTextView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                 } else if let text = extractedText {
                     ScrollView {
-                        Text(text)
-                            .font(.system(size: 16, design: .default))
+                        markdownContent(text)
+                            .font(.system(size: 17, design: .default))
+                            .lineSpacing(6)
                             .foregroundStyle(.primary)
+                            .multilineTextAlignment(.leading)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(16)
+                            .padding(20)
                     }
-                    .frame(maxHeight: 240)
+                    .frame(minHeight: 200, maxHeight: 420)
+                    .scrollIndicators(.visible)
                     .background(Color(.systemGray6))
                     .clipShape(RoundedRectangle(cornerRadius: 12))
 
@@ -135,6 +138,15 @@ struct PhotoToTextView: View {
                 errorMessage = nil
                 extractedText = nil
             }
+        }
+    }
+
+    @ViewBuilder
+    private func markdownContent(_ raw: String) -> some View {
+        if let attributed = try? AttributedString(markdown: raw) {
+            Text(attributed)
+        } else {
+            Text(raw)
         }
     }
 

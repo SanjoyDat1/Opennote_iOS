@@ -1,10 +1,9 @@
 import Foundation
+import UIKit
 
-/// Feynman AI tutor system prompt - Socratic tutor for learning.
-private let feynmanSystemPrompt = """
-You are Feynman, an AI tutor embedded in the user's notebook. You act as a Socratic tutor: you explain concepts clearly, ask thought-provoking questions, generate practice problems, and help the user understand by teaching (as Feynman would—simply and deeply). You have live access to the user's notes. Use this context to tailor your responses. Be concise, encouraging, and educational. When the user asks a question, explain step-by-step, use analogies when helpful, and suggest related questions they might explore.
-
-Output format: Use clean, readable plain text. Use standard Unicode characters (e.g. á not &aacute;). Use markdown sparingly—only **bold** when emphasizing a key term. Avoid excessive formatting. Write in clear, natural language.
+/// Output format instructions appended to all Feynman system prompts.
+private let feynmanOutputFormat = """
+Output format: Use clean, readable plain text. Use standard Unicode characters (e.g. á not &aacute;). For dashes use hyphen-minus (-) not em-dash. For quotes use straight apostrophe (') and straight double quote ("), not curly/smart quotes. Use markdown sparingly—only **bold** when emphasizing a key term. Avoid excessive formatting. Write in clear, natural language.
 """
 
 @Observable
@@ -18,9 +17,11 @@ final class OpenAIService {
     }
 
     /// Stream a chat completion. Yields text deltas as they arrive.
+    /// When mode is provided, its systemPrompt is used as the primary instruction.
     func streamChat(
         messages: [[String: String]],
-        systemContext: String
+        systemContext: String,
+        mode: FeynmanMode = .explain
     ) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             Task {
@@ -31,8 +32,9 @@ final class OpenAIService {
                     request.setValue("Bearer \(OpenAIConfig.apiKey)", forHTTPHeaderField: "Authorization")
                     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
+                    let systemContent = mode.systemPrompt + "\n\n" + feynmanOutputFormat + "\n\n---\nCurrent note context (Markdown):\n\n" + systemContext
                     var allMessages: [[String: String]] = [
-                        ["role": "system", "content": feynmanSystemPrompt + "\n\n---\nCurrent note context (Markdown):\n\n" + systemContext]
+                        ["role": "system", "content": systemContent]
                     ]
                     allMessages.append(contentsOf: messages)
 
@@ -51,23 +53,42 @@ final class OpenAIService {
                         return
                     }
 
-                    var buffer = ""
+                    var lineBuffer: [UInt8] = []
                     for try await byte in bytes {
-                        buffer.append(Character(Unicode.Scalar(byte)))
-                        if buffer.hasSuffix("\n") {
-                            let line = buffer.trimmingCharacters(in: .whitespacesAndNewlines)
-                            buffer = ""
-                            if line.hasPrefix("data: ") {
-                                let jsonStr = String(line.dropFirst(6))
-                                if jsonStr == "[DONE]" { break }
-                                if let data = jsonStr.data(using: .utf8),
-                                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                                   let choices = json["choices"] as? [[String: Any]],
-                                   let first = choices.first,
-                                   let delta = first["delta"] as? [String: Any],
-                                   let content = delta["content"] as? String, !content.isEmpty {
-                                    continuation.yield(content)
+                        if byte == 10 { // newline
+                            if let line = String(bytes: lineBuffer, encoding: .utf8) {
+                                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                                if trimmed.hasPrefix("data: ") {
+                                    let jsonStr = String(trimmed.dropFirst(6))
+                                    if jsonStr == "[DONE]" { break }
+                                    if let data = jsonStr.data(using: .utf8),
+                                       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                                       let choices = json["choices"] as? [[String: Any]],
+                                       let first = choices.first,
+                                       let delta = first["delta"] as? [String: Any],
+                                       let content = delta["content"] as? String, !content.isEmpty {
+                                        continuation.yield(content)
+                                    }
                                 }
+                            }
+                            lineBuffer = []
+                        } else if byte != 13 { // skip \r
+                            lineBuffer.append(byte)
+                        }
+                    }
+                    // Drain any remaining bytes (in case stream ends without newline)
+                    if !lineBuffer.isEmpty, let line = String(bytes: lineBuffer, encoding: .utf8) {
+                        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if trimmed.hasPrefix("data: ") {
+                            let jsonStr = String(trimmed.dropFirst(6))
+                            if jsonStr != "[DONE]",
+                               let data = jsonStr.data(using: .utf8),
+                               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                               let choices = json["choices"] as? [[String: Any]],
+                               let first = choices.first,
+                               let delta = first["delta"] as? [String: Any],
+                               let content = delta["content"] as? String, !content.isEmpty {
+                                continuation.yield(content)
                             }
                         }
                     }
@@ -77,6 +98,119 @@ final class OpenAIService {
                 }
             }
         }
+    }
+
+    /// Stream chat with optional mode prefix and optional attached image (multimodal).
+    func streamChatWithOptions(
+        userPrompt: String,
+        systemContext: String,
+        modePrefix: String? = nil,
+        image: UIImage? = nil
+    ) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                do {
+                    let url = baseURL.appending(path: "chat/completions")
+                    var request = URLRequest(url: url)
+                    request.httpMethod = "POST"
+                    request.setValue("Bearer \(OpenAIConfig.apiKey)", forHTTPHeaderField: "Authorization")
+                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+                    let systemContent: String
+                    if let modePrompt = modePrefix, !modePrompt.isEmpty {
+                        systemContent = modePrompt + "\n\n" + feynmanOutputFormat + "\n\n---\nCurrent note context (Markdown):\n\n" + systemContext
+                    } else {
+                        systemContent = FeynmanMode.explain.systemPrompt + "\n\n" + feynmanOutputFormat + "\n\n---\nCurrent note context (Markdown):\n\n" + systemContext
+                    }
+
+                    var userContent: Any
+                    if let img = image, let base64 = prepareImageBase64(img) {
+                        userContent = [
+                            ["type": "text", "text": userPrompt],
+                            ["type": "image_url", "image_url": ["url": "data:image/jpeg;base64,\(base64)"] as [String: Any]]
+                        ]
+                    } else {
+                        userContent = userPrompt
+                    }
+
+                    let messages: [[String: Any]] = [
+                        ["role": "system", "content": systemContent],
+                        ["role": "user", "content": userContent]
+                    ]
+
+                    let model = image != nil ? "gpt-4o" : OpenAIConfig.model
+
+                    let body: [String: Any] = [
+                        "model": model,
+                        "messages": messages,
+                        "stream": true,
+                        "max_tokens": 16384
+                    ]
+                    request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+                    let (bytes, response) = try await URLSession.shared.bytes(for: request)
+
+                    guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                        continuation.finish(throwing: OpenAIError.requestFailed)
+                        return
+                    }
+
+                    var lineBuffer: [UInt8] = []
+                    for try await byte in bytes {
+                        if byte == 10 {
+                            if let line = String(bytes: lineBuffer, encoding: .utf8) {
+                                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                                if trimmed.hasPrefix("data: ") {
+                                    let jsonStr = String(trimmed.dropFirst(6))
+                                    if jsonStr == "[DONE]" { break }
+                                    if let data = jsonStr.data(using: .utf8),
+                                       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                                       let choices = json["choices"] as? [[String: Any]],
+                                       let first = choices.first,
+                                       let delta = first["delta"] as? [String: Any],
+                                       let content = delta["content"] as? String, !content.isEmpty {
+                                        continuation.yield(content)
+                                    }
+                                }
+                            }
+                            lineBuffer = []
+                        } else if byte != 13 {
+                            lineBuffer.append(byte)
+                        }
+                    }
+                    if !lineBuffer.isEmpty, let line = String(bytes: lineBuffer, encoding: .utf8) {
+                        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if trimmed.hasPrefix("data: ") {
+                            let jsonStr = String(trimmed.dropFirst(6))
+                            if jsonStr != "[DONE]",
+                               let data = jsonStr.data(using: .utf8),
+                               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                               let choices = json["choices"] as? [[String: Any]],
+                               let first = choices.first,
+                               let delta = first["delta"] as? [String: Any],
+                               let content = delta["content"] as? String, !content.isEmpty {
+                                continuation.yield(content)
+                            }
+                        }
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
+
+    private func prepareImageBase64(_ image: UIImage) -> String? {
+        let maxEdge: CGFloat = 1568
+        let size = image.size
+        let longerEdge = max(size.width, size.height)
+        guard longerEdge > 0 else { return nil }
+        let scale = longerEdge > maxEdge ? maxEdge / longerEdge : 1.0
+        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        let resized = renderer.image { _ in image.draw(in: CGRect(origin: .zero, size: newSize)) }
+        return resized.jpegData(compressionQuality: 0.82)?.base64EncodedString()
     }
 
     /// Edit LaTeX content based on user instruction. Returns modified LaTeX or nil on failure.
@@ -137,7 +271,7 @@ final class OpenAIService {
                     ["type": "image_url", "image_url": ["url": "data:image/jpeg;base64,\(base64)"]]
                 ]]
             ],
-            "max_tokens": 8192
+            "max_tokens": 16384
         ] as [String : Any]
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
 
