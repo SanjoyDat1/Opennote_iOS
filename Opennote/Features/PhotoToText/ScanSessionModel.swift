@@ -2,6 +2,7 @@ import Foundation
 import UIKit
 
 @Observable
+@MainActor
 final class ScanSessionModel {
     enum Phase: Equatable {
         case idle
@@ -21,12 +22,26 @@ final class ScanSessionModel {
     var ocrConfidence: Float = 0.0
     var isDeepScan: Bool = false
 
-    func startScan() {
-        // Stub - implementation in DocumentScannerView flow
+    // MARK: - Task Management
+
+    private var scanTask: Task<Void, Never>?
+
+    /// Starts a new scan, cancelling any previous in-flight scan first.
+    func startScan(_ images: [UIImage]) {
+        scanTask?.cancel()
+        scanTask = nil
+
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.runScan(images)
+        }
+        scanTask = task
     }
 
-    func handleScannedImages(_ images: [UIImage]) async {
+    private func runScan(_ images: [UIImage]) async {
         guard let image = images.first else { return }
+        guard !Task.isCancelled else { return }
+
         capturedImage = image
         rawOCRText = ""
         formattedText = ""
@@ -34,25 +49,21 @@ final class ScanSessionModel {
         // ── STEP 1: Enhance ──────────────────────────────────────
         phase = .enhancing
         let enhanced = await ImagePreprocessor.enhance(image)
+        guard !Task.isCancelled else { return }
 
         // ── STEP 2: On-device OCR ────────────────────────────────
         phase = .recognizing
-        let ocrResult: OCRResult?
         if !isDeepScan {
-            ocrResult = try? await VisionOCRService.recognize(enhanced)
+            let ocrResult = try? await VisionOCRService.recognize(enhanced)
+            guard !Task.isCancelled else { return }
             ocrConfidence = ocrResult?.averageConfidence ?? 0
             rawOCRText = ocrResult?.rawText ?? ""
         } else {
-            ocrResult = nil
             ocrConfidence = 0
             rawOCRText = ""
         }
 
-        // ── STEP 3: Decide whether to go to OpenAI ─────────────
-        // Always go to OpenAI. Vision output is passed as context.
-        // (Threshold logic: if you want offline-only fallback in future,
-        //  check ocrConfidence >= 0.90 here.)
-
+        // ── STEP 3: GPT-4o Vision ────────────────────────────────
         phase = .formatting(progress: 0.0)
         let service = OpenAIVisionService()
         var chunkCount = 0
@@ -62,19 +73,23 @@ final class ScanSessionModel {
                 image: enhanced,
                 rawOCRText: rawOCRText
             ) {
+                guard !Task.isCancelled else { return }
                 formattedText += chunk
                 chunkCount += 1
-                // Rough progress estimate: assume ~300 chunks for a full page
                 let progress = min(Double(chunkCount) / 300.0, 0.95)
                 phase = .formatting(progress: progress)
             }
         } catch {
+            // If the task was cancelled, suppress the error — the new scan will take over.
+            guard !Task.isCancelled else { return }
             phase = .failed(message: error.localizedDescription)
             return
         }
 
+        guard !Task.isCancelled else { return }
         formattedText = Self.polishFormattedText(formattedText)
         phase = .reviewing
+        scanTask = nil
     }
 
     func insertText(into note: inout String, mode: InsertionMode) {
@@ -89,14 +104,15 @@ final class ScanSessionModel {
             note = formattedText
         }
         phase = .done
-        // Defer memory cleanup to next run loop tick
-        Task { @MainActor in
+        Task {
             try? await Task.sleep(nanoseconds: 500_000_000)
             self.reset()
         }
     }
 
     func reset() {
+        scanTask?.cancel()
+        scanTask = nil
         capturedImage = nil
         phase = .idle
         rawOCRText = ""
@@ -104,26 +120,34 @@ final class ScanSessionModel {
         ocrConfidence = 0.0
     }
 
+    /// Final cleanup pass on LLM output before display.
     private static func polishFormattedText(_ text: String) -> String {
-        let lines = text.components(separatedBy: .newlines)
+        let numberedPattern = #"^(\d+)\.\s+"#
         var output: [String] = []
         var previousWasBlank = false
 
-        for rawLine in lines {
+        for rawLine in text.components(separatedBy: .newlines) {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
+
             if line.isEmpty {
-                if !previousWasBlank {
-                    output.append("")
-                }
+                if !previousWasBlank { output.append("") }
                 previousWasBlank = true
                 continue
             }
-
             previousWasBlank = false
-            if line.hasPrefix("- ") || line.hasPrefix("* ") {
-                output.append("• " + String(line.dropFirst(2)).trimmingCharacters(in: .whitespaces))
+
+            var cleaned = line
+            if cleaned.hasPrefix("- ") || cleaned.hasPrefix("* ") || cleaned.hasPrefix("• ") {
+                cleaned = String(cleaned.dropFirst(2)).trimmingCharacters(in: .whitespaces)
             } else {
+                cleaned = cleaned.replacingOccurrences(
+                    of: numberedPattern, with: "", options: .regularExpression
+                )
+            }
+            if line.hasPrefix("#") || line == "---" || line == "***" {
                 output.append(line)
+            } else {
+                output.append(cleaned)
             }
         }
 

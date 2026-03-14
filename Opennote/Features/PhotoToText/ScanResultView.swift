@@ -1,194 +1,137 @@
 import SwiftUI
 
+// MARK: - Scan Result View
+
 struct ScanResultView: View {
     @Bindable var session: ScanSessionModel
     var onInsert: (String, InsertionMode) -> Void
     var onDismiss: () -> Void
 
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @State private var editableText: String = ""
-    @State private var showInsertOptions = false
-    @State private var blinkOpacity: Double = 1.0
     @State private var showOriginalImage = false
     @State private var showDeleteImageAlert = false
 
-    private var isFormatting: Bool {
-        if case .formatting = session.phase { return true }
+    // MARK: Derived state
+
+    private var isProcessing: Bool {
+        switch session.phase {
+        case .enhancing, .recognizing, .formatting: return true
+        default: return false
+        }
+    }
+
+    private var progressValue: Double {
+        switch session.phase {
+        case .enhancing:             return 0.08
+        case .recognizing:           return 0.22
+        case .formatting(let p):     return 0.25 + p * 0.75
+        default:                     return 1.0
+        }
+    }
+
+    private var statusText: String {
+        switch session.phase {
+        case .enhancing:         return "Enhancing image…"
+        case .recognizing:       return "Reading handwriting…"
+        case .formatting:        return "Structuring your notes with AI…"
+        case .reviewing:         return "Ready — review and insert below"
+        case .failed(let msg):   return msg
+        default:                 return ""
+        }
+    }
+
+    private var isFailed: Bool {
+        if case .failed = session.phase { return true }
         return false
     }
 
+    private var canInsert: Bool {
+        if case .reviewing = session.phase { return !session.formattedText.isEmpty }
+        return false
+    }
+
+    // MARK: Body
+
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                if horizontalSizeClass == .regular {
-                    HStack(spacing: 0) {
-                        pane1
-                        Rectangle().fill(Color(.separator)).frame(width: 1)
-                        pane2
+            ZStack(alignment: .bottom) {
+
+                // ── Main scroll area ──────────────────────────────────
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+
+                        // Progress / status banner
+                        if isProcessing || statusText != "" {
+                            statusBanner
+                                .padding(.horizontal, 20)
+                                .padding(.top, 14)
+                                .padding(.bottom, 4)
+                        }
+
+                        // Rendered note preview (streams in live)
+                        if !session.formattedText.isEmpty {
+                            MarkdownNotePreview(markdown: session.formattedText)
+                                .padding(.horizontal, 24)
+                                .padding(.top, 20)
+                                .padding(.bottom, 120)
+                        } else if !isProcessing {
+                            emptyState
+                        }
                     }
-                } else {
-                    TabView {
-                        pane1
-                            .tabItem { Text("Original") }
-                        pane2
-                            .tabItem { Text("Result") }
-                    }
-                    .tabViewStyle(.page(indexDisplayMode: .automatic))
+                }
+                .background(Color(.systemBackground))
+
+                // ── Floating insert button ────────────────────────────
+                if canInsert {
+                    insertButton
                 }
 
-                bottomBar
+                // ── Retry button on failure ───────────────────────────
+                if case .failed = session.phase, session.capturedImage != nil {
+                    retryButton
+                }
             }
             .navigationTitle("Scan Result")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        onDismiss()
-                    }
+                    Button("Cancel") { onDismiss() }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Insert") {
-                        showInsertOptions = true
-                    }
-                    .disabled(isFormatting)
-                }
-            }
-            .confirmationDialog("Insert Options", isPresented: $showInsertOptions) {
-                Button("Insert at Cursor") {
-                    session.formattedText = editableText
-                    onInsert(editableText, .atCursor(position: 0))
-                }
-                Button("Append to End") {
-                    session.formattedText = editableText
-                    onInsert(editableText, .appendToEnd)
-                }
-                Button("Replace Note") {
-                    session.formattedText = editableText
-                    onInsert(editableText, .replaceAll)
-                }
-                Button("Cancel", role: .cancel) {}
-            } message: {
-                Text("Choose where to insert the scanned text")
-            }
-        }
-        .onAppear {
-            editableText = session.formattedText
-        }
-        .onChange(of: session.formattedText) { _, newValue in
-            editableText = newValue
-        }
-    }
-
-    private var pane1: some View {
-        VStack(spacing: 8) {
-            if let img = session.capturedImage {
-                Image(uiImage: img)
-                    .resizable()
-                    .scaledToFit()
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-            }
-            Text("Original")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding()
-    }
-
-    private var pane2: some View {
-        ScrollViewReader { proxy in
-            ZStack(alignment: .trailing) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        TextEditor(text: $editableText)
-                            .font(.system(size: 17, weight: .regular, design: .default))
-                            .scrollContentBackground(.hidden)
-                            .foregroundStyle(.primary)
-                            .lineSpacing(8)
-                            .frame(minHeight: 280)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 16)
-                            .onChange(of: editableText) { _, newValue in
-                                session.formattedText = newValue
-                            }
-                        Color.clear.frame(height: 1).id("bottom")
-                    }
-                }
-                .scrollIndicators(.visible)
-                .background(
-                    LinearGradient(
-                        colors: [Color(.systemBackground), Color(.systemGray6).opacity(0.75)],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.opennoteGreen.opacity(0.18), lineWidth: 1)
-                )
-                .onChange(of: session.formattedText) { _, _ in
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        proxy.scrollTo("bottom", anchor: .bottom)
-                    }
-                }
-
-                if isFormatting {
-                    Rectangle()
-                        .fill(Color.accentColor)
-                        .frame(width: 2, height: 20)
-                        .opacity(blinkOpacity)
-                        .padding(8)
-                        .animation(.easeInOut(duration: 0.5).repeatForever(autoreverses: true), value: blinkOpacity)
-                        .task(id: isFormatting) {
-                            guard isFormatting else { return }
-                            while !Task.isCancelled {
-                                blinkOpacity = 0
-                                try? await Task.sleep(nanoseconds: 250_000_000)
-                                blinkOpacity = 1
-                                try? await Task.sleep(nanoseconds: 250_000_000)
-                            }
-                        }
-                }
-
+                // Original image menu
                 if session.capturedImage != nil {
-                    VStack(spacing: 10) {
-                        Button {
-                            showOriginalImage = true
+                    ToolbarItem(placement: .primaryAction) {
+                        Menu {
+                            Button {
+                                showOriginalImage = true
+                            } label: {
+                                Label("View Original", systemImage: "photo")
+                            }
+                            Button(role: .destructive) {
+                                showDeleteImageAlert = true
+                            } label: {
+                                Label("Delete Original", systemImage: "trash")
+                            }
                         } label: {
-                            Image(systemName: "photo")
-                                .font(.system(size: 16, weight: .semibold))
+                            Image(systemName: "photo.circle")
                                 .foregroundStyle(Color.opennoteGreen)
-                                .frame(width: 42, height: 42)
-                                .background(.ultraThinMaterial)
-                                .clipShape(Circle())
-                        }
-
-                        Button {
-                            showDeleteImageAlert = true
-                        } label: {
-                            Image(systemName: "trash")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(.red)
-                                .frame(width: 42, height: 42)
-                                .background(.ultraThinMaterial)
-                                .clipShape(Circle())
+                                .font(.system(size: 20))
                         }
                     }
-                    .padding(.trailing, 10)
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding()
+        // Original image sheet
         .sheet(isPresented: $showOriginalImage) {
             NavigationStack {
                 Group {
                     if let img = session.capturedImage {
-                        Image(uiImage: img)
-                            .resizable()
-                            .scaledToFit()
-                            .padding()
+                        GeometryReader { geo in
+                            Image(uiImage: img)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: geo.size.width, height: geo.size.height)
+                                .clipped()
+                        }
+                        .ignoresSafeArea(edges: .bottom)
                     } else {
                         ContentUnavailableView("Image Removed", systemImage: "photo.slash")
                     }
@@ -203,83 +146,216 @@ struct ScanResultView: View {
             }
         }
         .alert("Delete original image?", isPresented: $showDeleteImageAlert) {
-            Button("Delete", role: .destructive) {
-                session.capturedImage = nil
-            }
+            Button("Delete", role: .destructive) { session.capturedImage = nil }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("You can keep the extracted text, but the source image will be removed from this scan.")
+            Text("The extracted text will be kept; only the source photo is removed.")
         }
     }
 
-    private var bottomBar: some View {
-        VStack(spacing: 8) {
-            switch session.phase {
-            case .enhancing:
-                Text("Enhancing image…")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            case .recognizing:
-                Text("Reading text…")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            case .formatting(let progress):
-                VStack(spacing: 4) {
-                    ProgressView(value: progress)
-                    Text("Formatting with AI…")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-            case .reviewing:
-                Text("Review and edit below, then tap Insert")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            case .failed(let msg):
-                VStack(spacing: 8) {
-                    Text(msg)
-                        .font(.subheadline)
-                        .foregroundStyle(.red)
-                        .multilineTextAlignment(.center)
-                    if session.capturedImage != nil {
-                        Button("Retry") {
-                            Task {
-                                await session.handleScannedImages([session.capturedImage!])
-                            }
-                        }
-                    }
-                }
-            default:
-                EmptyView()
-            }
+    // MARK: Sub-views
 
-            if case .reviewing = session.phase, true {
-                deepScanRow
+    private var statusBanner: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if isProcessing {
+                ProgressView(value: progressValue)
+                    .tint(Color.opennoteGreen)
+                    .animation(.easeInOut(duration: 0.4), value: progressValue)
             }
-            if case .failed = session.phase, true {
-                deepScanRow
+            HStack(spacing: 6) {
+                if isProcessing {
+                    ProgressView()
+                        .scaleEffect(0.75)
+                        .tint(Color.opennoteGreen)
+                }
+                Text(statusText)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(isFailed ? Color.red : Color.secondary)
             }
         }
-        .padding()
-        .frame(maxWidth: .infinity)
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.systemGray6))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
-    private var deepScanRow: some View {
-        HStack {
-            Toggle("Deep Scan (skip on-device OCR)", isOn: Binding(
-                get: { session.isDeepScan },
-                set: { session.isDeepScan = $0 }
-            ))
-            if session.capturedImage != nil {
-                Button("Re-scan") {
-                    Task {
-                        await session.handleScannedImages([session.capturedImage!])
-                    }
+    private var insertButton: some View {
+        VStack(spacing: 0) {
+            // Fade gradient so content doesn't hard-clip behind the button
+            LinearGradient(
+                colors: [Color(.systemBackground).opacity(0), Color(.systemBackground)],
+                startPoint: .top, endPoint: .bottom
+            )
+            .frame(height: 28)
+            .allowsHitTesting(false)
+
+            Button {
+                Haptics.impact(.medium)
+                onInsert(session.formattedText, .appendToEnd)
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.down.doc.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("Insert into Notes")
+                        .font(.system(size: 17, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 17)
+                .background(Color.opennoteGreen)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 24)
+            .background(Color(.systemBackground))
+        }
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    private var retryButton: some View {
+        Button {
+            guard let img = session.capturedImage else { return }
+            Haptics.impact(.medium)
+            session.startScan([img])
+        } label: {
+            Label("Try Again", systemImage: "arrow.clockwise")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 17)
+                .background(Color.red.opacity(0.85))
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 24)
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "doc.text.viewfinder")
+                .font(.system(size: 48, weight: .light))
+                .foregroundStyle(Color.opennoteGreen.opacity(0.6))
+            Text("No text extracted")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+            Text("Try re-scanning with better lighting or a steadier angle.")
+                .font(.subheadline)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.top, 80)
+        .padding(.horizontal, 40)
+        .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - Markdown Note Preview
+
+/// Renders the AI-formatted markdown as a polished note preview,
+/// matching how it will look once inserted into the journal.
+private struct MarkdownNotePreview: View {
+    let markdown: String
+
+    private var segments: [NoteSegment] { parseSegments(markdown) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(segments.enumerated()), id: \.offset) { _, seg in
+                segmentView(seg)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(.easeOut(duration: 0.15), value: markdown)
+    }
+
+    @ViewBuilder
+    private func segmentView(_ seg: NoteSegment) -> some View {
+        switch seg.kind {
+        case .h1:
+            inlineText(seg.content)
+                .font(.system(size: 26, weight: .bold))
+                .foregroundStyle(.primary)
+                .padding(.bottom, 10)
+                .padding(.top, 4)
+
+        case .h2:
+            inlineText(seg.content)
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(.primary)
+                .padding(.bottom, 6)
+                .padding(.top, 18)
+
+        case .h3:
+            inlineText(seg.content)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.primary)
+                .padding(.bottom, 4)
+                .padding(.top, 14)
+
+        case .body:
+            inlineText(seg.content)
+                .font(.system(size: 17, weight: .regular))
+                .foregroundStyle(.primary)
+                .lineSpacing(5)
+                .padding(.bottom, 10)
+
+        case .divider:
+            Divider()
+                .padding(.vertical, 14)
+
+        case .blank:
+            Color.clear.frame(height: 6)
+        }
+    }
+
+    @ViewBuilder
+    private func inlineText(_ text: String) -> some View {
+        if let attributed = try? AttributedString(markdown: text) {
+            Text(attributed)
+        } else {
+            Text(text)
+        }
+    }
+
+    // MARK: Parser
+
+    private enum SegmentKind { case h1, h2, h3, body, divider, blank }
+    private struct NoteSegment { let kind: SegmentKind; let content: String }
+
+    private func parseSegments(_ raw: String) -> [NoteSegment] {
+        var result: [NoteSegment] = []
+        for line in raw.components(separatedBy: "\n") {
+            let t = line.trimmingCharacters(in: .whitespaces)
+            if t.isEmpty {
+                result.append(NoteSegment(kind: .blank, content: ""))
+            } else if t == "---" || t == "***" || t == "___" {
+                result.append(NoteSegment(kind: .divider, content: ""))
+            } else if t.hasPrefix("### ") {
+                result.append(NoteSegment(kind: .h3, content: String(t.dropFirst(4))))
+            } else if t.hasPrefix("## ") {
+                result.append(NoteSegment(kind: .h2, content: String(t.dropFirst(3))))
+            } else if t.hasPrefix("# ") {
+                result.append(NoteSegment(kind: .h1, content: String(t.dropFirst(2))))
+            } else {
+                // Strip any stray list markers the LLM may still output
+                var body = t
+                if body.hasPrefix("- ") || body.hasPrefix("* ") || body.hasPrefix("• ") {
+                    body = String(body.dropFirst(2))
+                } else {
+                    let numPattern = #"^(\d+)\.\s+"#
+                    body = body.replacingOccurrences(of: numPattern, with: "", options: .regularExpression)
+                }
+                if !body.isEmpty {
+                    result.append(NoteSegment(kind: .body, content: body))
                 }
             }
         }
-        .padding(.horizontal)
-        .frame(maxWidth: .infinity)
-        .background(Color(.systemGray6))
+        // Collapse consecutive blanks to a single one
+        return result.reduce(into: [NoteSegment]()) { acc, seg in
+            if seg.kind == .blank, acc.last?.kind == .blank { return }
+            acc.append(seg)
+        }
     }
 }

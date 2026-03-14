@@ -63,9 +63,9 @@ struct PhotoToTextButton: View {
         .onChange(of: scannedImages) { _, newImages in
             guard !newImages.isEmpty else { return }
             showResult = true
-            Task {
-                await session.handleScannedImages(newImages)
-            }
+            session.startScan(newImages)
+            // Reset immediately so the next scan always triggers onChange
+            scannedImages = []
         }
         .sheet(isPresented: $showImagePicker) {
             PhotoPickerView(selectedImage: Binding(
@@ -136,9 +136,8 @@ struct PhotoToTextFlowSheet: View {
         .onChange(of: scannedImages) { _, newImages in
             guard !newImages.isEmpty else { return }
             showResult = true
-            Task {
-                await session.handleScannedImages(newImages)
-            }
+            session.startScan(newImages)
+            scannedImages = []
         }
         .sheet(isPresented: $showImagePicker) {
             PhotoPickerView(selectedImage: Binding(

@@ -5,41 +5,51 @@ import UIKit
 /// Image is transmitted to OpenAI API over TLS and not stored or logged locally.
 final class OpenAIVisionService {
     private static let systemPrompt = """
-    You are a precise handwriting and whiteboard transcription assistant.
-    Your job is to convert the content of the provided image into clean,
-    well-structured Markdown.
+    You are an expert note-taking assistant that converts handwritten or printed \
+    notes into clean, beautifully structured plain-text notes for a mobile app.
 
-    Rules you must follow without exception:
-    - Transcribe ALL visible content. Never summarize, skip, or paraphrase.
-    - If you also receive a raw OCR string as context, use it to resolve
-      ambiguous characters, but trust the image over the OCR text.
-    - Detect visual hierarchy: text that is larger, underlined, circled, or
-      written at the top of a section should become a Markdown heading (# or ##).
-    - Convert hand-drawn bullet points, dashes, or dots into Markdown list items.
-    - Convert numbered lists into proper Markdown numbered lists.
-    - If you see drawn checkboxes (empty squares or circles), render them as [ ].
-      If they appear checked, render them as [x].
-    - If you see anything that looks like code (variable names, equations,
-      pseudocode), wrap it in a fenced code block with an appropriate language tag.
-    - Preserve blank lines between sections exactly as they appear visually.
-    - Fix obvious OCR errors (e.g., "rn" misread as "m") using context.
-    - If part of the image is unreadable, insert [illegible] at that position.
-    - Return ONLY the Markdown content. No preamble, no explanation,
-      no "Here is the transcription:" — just the raw Markdown.
+    YOUR GOAL
+    Faithfully capture every word the student wrote, then organize it so it reads
+    like a polished, professional study note — clear, scannable, and easy to review.
+
+    STRUCTURE RULES
+    - If the page has a clear title or subject, render it as: # Title
+    - Use ## for major section headings (topics, chapters, big ideas)
+    - Use ### for sub-headings (sub-topics, examples, sub-concepts)
+    - Use **bold** for key terms, definitions, names, formulas written in words,
+      and any text that was underlined, circled, or starred in the original.
+    - Write all other content as clean body paragraphs.
+    - Separate distinct sections with a single blank line.
+    - Use --- only for a clear visual break between completely separate topics on
+      the same page (use sparingly — at most once or twice per page).
+
+    CONTENT RULES
+    - Transcribe EVERY SINGLE word you can read. Never skip, summarize, abbreviate, or paraphrase.
+    - There is NO word limit — output the full page, even if it is very long.
+    - Preserve the original logical order and flow of ideas.
+    - If the writer used bullets, dashes, or numbered items, convert each item
+      into a short, flowing sentence or keep it as its own paragraph.
+      Do NOT output bullet points, dashes, or numbered list markers.
+    - Fix obvious handwriting or OCR recognition errors using context clues.
+    - If any portion is genuinely illegible, write [illegible] at that position.
+    - Do NOT output code blocks, LaTeX, or equations (text-only beta).
+    - Do NOT add any content that was not in the original notes.
+
+    OUTPUT FORMAT
+    - Return ONLY the formatted note text — no preamble, no explanation,
+      no "Here is the transcription", no closing remarks.
+    - Start immediately with the note content.
     """
 
     private func prepareImagePayload(_ image: UIImage) -> String? {
-        let maxEdge: CGFloat = 1568
+        // GPT-4o "high" detail tiles at 512×512 and supports up to 2048px per edge.
+        // Staying at 2048 gives maximum resolution without exceeding the model's tile budget.
+        let maxEdge: CGFloat = 2048
         let size = image.size
         let longerEdge = max(size.width, size.height)
         guard longerEdge > 0 else { return nil }
 
-        let scale: CGFloat
-        if longerEdge > maxEdge {
-            scale = maxEdge / longerEdge
-        } else {
-            scale = 1.0
-        }
+        let scale: CGFloat = longerEdge > maxEdge ? maxEdge / longerEdge : 1.0
 
         let newSize = CGSize(width: size.width * scale, height: size.height * scale)
         let renderer = UIGraphicsImageRenderer(size: newSize)
@@ -47,7 +57,8 @@ final class OpenAIVisionService {
             image.draw(in: CGRect(origin: .zero, size: newSize))
         }
 
-        guard let jpegData = resized.jpegData(compressionQuality: 0.82) else { return nil }
+        // 0.92 quality preserves fine handwriting strokes without excessive file size
+        guard let jpegData = resized.jpegData(compressionQuality: 0.92) else { return nil }
         return jpegData.base64EncodedString()
     }
 
@@ -69,12 +80,27 @@ final class OpenAIVisionService {
                             ] as [String: Any]
                         ]
                     ]
-                    if !rawOCRText.isEmpty {
-                        contentBlocks.append([
-                            "type": "text",
-                            "text": "Raw OCR for reference (trust image over this):\n\(rawOCRText)\n\nPlease transcribe and format this note."
-                        ])
+                    let userInstruction: String
+                    if rawOCRText.isEmpty {
+                        userInstruction = """
+                        Transcribe EVERY word visible in this image — top to bottom, left to right. \
+                        Do not skip, omit, or summarize any text regardless of how much there is. \
+                        There is no word limit. Output everything you can read.
+                        """
+                    } else {
+                        userInstruction = """
+                        Raw OCR (use as a reading aid — trust the image over this):
+                        \(rawOCRText)
+
+                        Transcribe EVERY word visible in this image — top to bottom, left to right. \
+                        Do not skip, omit, or summarize any text regardless of how much there is. \
+                        There is no word limit. Output everything you can read.
+                        """
                     }
+                    contentBlocks.append([
+                        "type": "text",
+                        "text": userInstruction
+                    ])
 
                     let messages: [[String: Any]] = [
                         ["role": "system", "content": Self.systemPrompt],
