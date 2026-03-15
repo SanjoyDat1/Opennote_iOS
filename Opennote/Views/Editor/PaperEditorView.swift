@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import PDFKit
 
 // MARK: - Compile state
 
@@ -224,7 +225,12 @@ struct PaperEditorView: View {
     private var pdfPreview: some View {
         ZStack {
             if let url = pdfURL {
-                PDFWebView(url: url)
+                // HTML fallback uses WKWebView; real PDFs use native PDFKit
+                if url.pathExtension == "html" {
+                    PDFWebView(url: url)
+                } else {
+                    PDFKitView(url: url)
+                }
             } else {
                 VStack(spacing: 16) {
                     Image(systemName: "doc.richtext")
@@ -402,34 +408,43 @@ struct PaperEditorView: View {
             userInfo: [NSLocalizedDescriptionKey: "All compilation methods failed."]))
     }
 
-    /// Compile via latexonline.cc (tar.gz binary POST).
+    /// Compile via latexonline.cc — simple form-encoded POST as documented.
+    /// POST https://latexonline.cc/compile  (Content-Type: application/x-www-form-urlencoded)
+    /// Body: text=<url-percent-encoded LaTeX source>
     private static func doCompileLatexOnline(tex: String) async -> Result<URL, NSError> {
         func err(_ msg: String, code: Int = -1) -> NSError {
             NSError(domain: "PaperEditor", code: code, userInfo: [NSLocalizedDescriptionKey: msg])
         }
-        guard let tarData = buildTarGz(texContent: tex) else {
-            return .failure(err("Could not package the LaTeX document."))
+        guard let url = URL(string: "https://latexonline.cc/compile") else {
+            return .failure(err("Invalid latexonline.cc URL."))
         }
-        guard let url = URL(string: "https://latexonline.cc/compile?command=pdflatex&force=true") else {
-            return .failure(err("Invalid compilation URL."))
+        guard let encoded = tex.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+            return .failure(err("Could not percent-encode the LaTeX source."))
         }
-        var request = URLRequest(url: url, timeoutInterval: 90)
+        var request = URLRequest(url: url, timeoutInterval: 30)
         request.httpMethod = "POST"
-        request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
-        request.httpBody = tarData
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.httpBody = "text=\(encoded)".data(using: .utf8)
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            let statusOK = (response as? HTTPURLResponse).map { (200..<300).contains($0.statusCode) } ?? false
-            if statusOK, data.prefix(4) == Data("%PDF".utf8) {
-                return .success(try savePDF(data))
-            }
+            if data.prefix(4) == Data("%PDF".utf8) { return .success(try savePDF(data)) }
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            let msg = String(data: data, encoding: .utf8) ?? "Compilation failed."
-            return .failure(err("[latexonline.cc] HTTP \(code): \(msg)", code: code))
+            let raw = String(data: data, encoding: .utf8) ?? "Compilation failed."
+            return .failure(err("[latexonline.cc] HTTP \(code): \(parseErrorLog(raw))", code: code))
         } catch {
             return .failure(error as NSError)
         }
+    }
+
+    /// Extract only the meaningful lines from a pdflatex error log.
+    private static func parseErrorLog(_ log: String) -> String {
+        let lines = log.components(separatedBy: "\n")
+        let important = lines.filter {
+            $0.hasPrefix("!") || $0.contains("Error") || $0.contains("error") ||
+            $0.hasPrefix("l.") || $0.contains("undefined")
+        }
+        return important.isEmpty ? log : important.prefix(15).joined(separator: "\n")
     }
 
     /// Fallback 1: compile via texlive.net CGI (David Carlisle's latexcgi).
@@ -461,7 +476,7 @@ struct PaperEditorView: View {
         field("return", value: "pdf")
         body += "--\(boundary)--\r\n".data(using: .utf8)!
 
-        var request = URLRequest(url: url, timeoutInterval: 120)
+        var request = URLRequest(url: url, timeoutInterval: 30)
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.httpBody = body
@@ -470,9 +485,8 @@ struct PaperEditorView: View {
             let (data, response) = try await URLSession.shared.data(for: request)
             if data.prefix(4) == Data("%PDF".utf8) { return .success(try savePDF(data)) }
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            // Truncate HTML pages in the error message so they don't swamp the log
             let raw = String(data: data, encoding: .utf8) ?? ""
-            let msg = raw.hasPrefix("<!") ? "texlive.net returned an HTML page (service may be down)" : raw
+            let msg = raw.hasPrefix("<!") ? "texlive.net returned an HTML page (service may be down)" : parseErrorLog(raw)
             return .failure(err("[texlive.net] HTTP \(code): \(msg)", code: code))
         } catch {
             return .failure(error as NSError)
@@ -713,80 +727,6 @@ struct PaperEditorView: View {
         return text
     }
 
-    // MARK: - Tar.gz builder
-
-    /// Creates a gzip-compressed tar archive containing a single `main.tex`.
-    /// Uses the format accepted by `latexonline.cc/compile` POST endpoint.
-    private static func buildTarGz(texContent: String) -> Data? {
-        guard let texData = texContent.data(using: .utf8) else { return nil }
-
-        // ── Build minimal POSIX ustar tar ────────────────────────────────────
-        var tar = Data()
-        var h = [UInt8](repeating: 0, count: 512)
-
-        func write(_ s: String, at off: Int, max n: Int) {
-            for (i, b) in s.utf8.prefix(n).enumerated() { h[off + i] = b }
-        }
-
-        write("main.tex",                                    at: 0,   max: 100) // name
-        write("0000644\0",                                   at: 100, max: 8)   // mode
-        write("0000000\0",                                   at: 108, max: 8)   // uid
-        write("0000000\0",                                   at: 116, max: 8)   // gid
-        write(String(format: "%011o\0", texData.count),      at: 124, max: 12)  // size
-        write(String(format: "%011o\0",
-                     Int(Date().timeIntervalSince1970)),      at: 136, max: 12)  // mtime
-        h[156] = UInt8(ascii: "0")                                               // type: regular
-        write("ustar\0",                                     at: 257, max: 6)   // magic
-        write("00",                                          at: 263, max: 2)   // version
-
-        // Checksum field must be ASCII spaces when summing, then replaced with octal sum
-        for i in 148..<156 { h[i] = UInt8(ascii: " ") }
-        let cksum = h.reduce(0) { $0 + Int($1) }
-        write(String(format: "%06o\0 ", cksum),              at: 148, max: 8)
-
-        tar.append(contentsOf: h)
-        tar.append(texData)
-
-        // Pad file content to 512-byte block boundary
-        let rem = texData.count % 512
-        if rem > 0 { tar.append(contentsOf: [UInt8](repeating: 0, count: 512 - rem)) }
-        // Two zero-filled 512-byte end-of-archive blocks
-        tar.append(contentsOf: [UInt8](repeating: 0, count: 1024))
-
-        // ── Wrap in gzip ─────────────────────────────────────────────────────
-        // NSData.compressed(using: .zlib) gives RFC-1950 zlib: 2-byte header | DEFLATE | 4-byte Adler32.
-        // gzip (RFC-1952) needs raw DEFLATE stream, framed with its own header/trailer.
-        guard let zlibData = try? (tar as NSData).compressed(using: .zlib) as Data,
-              zlibData.count > 6 else { return nil }
-
-        let deflate = zlibData.dropFirst(2).dropLast(4)   // strip zlib envelope
-
-        var gz = Data()
-        gz.append(contentsOf: [0x1f, 0x8b, 0x08, 0x00,    // magic, DEFLATE, no flags
-                                0x00, 0x00, 0x00, 0x00,    // mtime = 0
-                                0x00, 0xff])               // xfl=0, OS=unknown
-        gz.append(deflate)
-
-        var crc = tarCRC32(tar)                            // CRC32 of uncompressed tar
-        withUnsafeBytes(of: &crc)   { gz.append(contentsOf: $0) }
-        var sz = UInt32(tar.count & 0xFFFF_FFFF)           // ISIZE mod 2^32
-        withUnsafeBytes(of: &sz)    { gz.append(contentsOf: $0) }
-
-        return gz
-    }
-
-    /// CRC-32 with polynomial 0xEDB88320 as required by gzip (RFC-1952).
-    private static func tarCRC32(_ data: Data) -> UInt32 {
-        let tbl: [UInt32] = (0..<256).map { n -> UInt32 in
-            var c = UInt32(n)
-            for _ in 0..<8 { c = (c & 1) != 0 ? 0xEDB8_8320 ^ (c >> 1) : c >> 1 }
-            return c
-        }
-        var crc: UInt32 = 0xFFFF_FFFF
-        for b in data { crc = tbl[Int((crc ^ UInt32(b)) & 0xFF)] ^ (crc >> 8) }
-        return crc ^ 0xFFFF_FFFF
-    }
-
     private func convertJournalToLaTeX(_ journal: Journal) {
         // Journal blocks aren't persisted - create a template with the journal title.
         // User can edit or use AI to refine.
@@ -835,20 +775,39 @@ private extension CGFloat {
     }
 }
 
+/// Native PDFKit viewer — used for real PDF files returned by compilation services.
+private struct PDFKitView: UIViewRepresentable {
+    let url: URL
+
+    func makeUIView(context: Context) -> PDFView {
+        let pdfView = PDFView()
+        pdfView.autoScales = true
+        pdfView.displayMode = .singlePageContinuous
+        pdfView.displayDirection = .vertical
+        pdfView.backgroundColor = UIColor(named: "opennoteCream") ?? .systemBackground
+        if let doc = PDFDocument(url: url) { pdfView.document = doc }
+        return pdfView
+    }
+
+    func updateUIView(_ pdfView: PDFView, context: Context) {
+        if let doc = PDFDocument(url: url), doc.documentURL != pdfView.document?.documentURL {
+            pdfView.document = doc
+        }
+    }
+}
+
+/// WKWebView renderer — used only for the local HTML preview fallback.
 private struct PDFWebView: UIViewRepresentable {
     let url: URL
 
     func makeUIView(context: Context) -> WKWebView {
-        let config = WKWebViewConfiguration()
-        let view = WKWebView(frame: .zero, configuration: config)
-        let readAccessURL = url.deletingLastPathComponent()
-        view.loadFileURL(url, allowingReadAccessTo: readAccessURL)
+        let view = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        view.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
         return view
     }
 
     func updateUIView(_ webView: WKWebView, context: Context) {
-        let readAccessURL = url.deletingLastPathComponent()
-        webView.loadFileURL(url, allowingReadAccessTo: readAccessURL)
+        webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
     }
 }
 
