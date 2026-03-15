@@ -146,7 +146,8 @@ struct PaperScanButton: View {
             LaTeXScanResultView(
                 session: session,
                 onInsert: { latex in
-                    insertLaTeX(latex, into: &content)
+                    // GPT-4o returns the complete compilable document — replace entirely.
+                    content = latex
                     Haptics.impact(.medium)
                     showResult = false
                 },
@@ -155,18 +156,6 @@ struct PaperScanButton: View {
                     showResult = false
                 }
             )
-        }
-    }
-
-    /// Inserts the generated LaTeX body content just before \end{document}.
-    /// Falls back to appending if no \end{document} is found.
-    private func insertLaTeX(_ latex: String, into text: inout String) {
-        let endMarker = "\\end{document}"
-        if let range = text.range(of: endMarker, options: .backwards) {
-            let insertion = "\n\n% --- Scanned Notes (auto-generated) ---\n" + latex + "\n\n"
-            text.insert(contentsOf: insertion, at: range.lowerBound)
-        } else {
-            text += "\n\n% --- Scanned Notes (auto-generated) ---\n" + latex
         }
     }
 }
@@ -278,10 +267,10 @@ struct LaTeXScanResultView: View {
         VStack(alignment: .leading, spacing: 12) {
             // Header badge
             HStack(spacing: 7) {
-                Image(systemName: "text.badge.checkmark")
+                Image(systemName: "checkmark.seal.fill")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.opennoteGreen)
-                Text("Generated LaTeX — ready to add to your paper")
+                Text("Complete, compilable document — tap Apply to replace your paper")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.opennoteGreen)
                 Spacer()
@@ -310,9 +299,9 @@ struct LaTeXScanResultView: View {
                 onInsert(session.generatedLaTeX)
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "doc.text.fill")
+                    Image(systemName: "arrow.triangle.2.circlepath.doc.on.clipboard")
                         .font(.system(size: 15, weight: .semibold))
-                    Text("Add to Paper")
+                    Text("Apply to Paper")
                         .font(.system(size: 17, weight: .semibold))
                 }
                 .foregroundStyle(.white)
@@ -517,7 +506,7 @@ private struct LaTeXAnalyzingView: View {
             Spacer().frame(height: 32)
 
             VStack(spacing: 10) {
-                Text("Converting to LaTeX")
+                Text("Integrating into your paper")
                     .font(.system(size: 24, weight: .bold))
                     .multilineTextAlignment(.center)
 
@@ -563,7 +552,7 @@ private struct LaTeXAnalyzingView: View {
         case .recognizing:             return "Reading your handwriting..."
         case .generating(let p):
             let pct = Int((0.25 + p * 0.75) * 100)
-            return "Generating LaTeX… \(pct)%"
+            return "Building your document… \(pct)%"
         default:                       return "Processing..."
         }
     }

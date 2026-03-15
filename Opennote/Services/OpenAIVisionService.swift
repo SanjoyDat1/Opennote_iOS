@@ -165,8 +165,9 @@ final class OpenAIVisionService {
 
     // MARK: - LaTeX generation
 
-    /// Converts a scanned image into LaTeX **body** content (no preamble) that can be
-    /// inserted directly inside an existing \begin{document}...\end{document} block.
+    /// Integrates scanned notes into an existing LaTeX document and returns the
+    /// COMPLETE, COMPILABLE updated document — preamble, body, and \end{document}.
+    /// GPT-4o is responsible for all package management and structural validity.
     func formatNoteAsLaTeX(image: UIImage, rawOCRText: String, existingLaTeX: String) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             Task {
@@ -177,53 +178,61 @@ final class OpenAIVisionService {
                     }
 
                     let systemPrompt = """
-                    You are an expert LaTeX typesetter. Convert the handwritten or printed notes \
-                    in this image into beautifully formatted LaTeX body content.
+                    You are an expert LaTeX typesetter and compiler. Your job is to \
+                    integrate handwritten or printed notes from a scanned image into an \
+                    existing LaTeX document, then return the COMPLETE, COMPILABLE result.
 
-                    CRITICAL CONSTRAINTS
-                    - Output ONLY valid LaTeX body content — the code that belongs INSIDE a \
-                    \\begin{document}...\\end{document} block.
-                    - Do NOT output \\documentclass, \\usepackage, \\begin{document}, \
-                    \\end{document}, or any preamble commands.
-                    - Do NOT add any explanation, introduction, or closing remarks.
-                    - Start directly with the first LaTeX content token (e.g. \\section{} or \\noindent).
+                    OUTPUT CONTRACT — NON-NEGOTIABLE
+                    - Return the COMPLETE LaTeX document, starting with \\documentclass \
+                    and ending with \\end{document}.
+                    - The document MUST compile with pdflatex without errors.
+                    - Do NOT wrap output in markdown code fences or any explanation.
+                    - Do NOT output anything before \\documentclass or after \\end{document}.
+
+                    INTEGRATION RULES
+                    - Transcribe EVERY word visible in the image. Never skip or paraphrase.
+                    - Append the scanned notes as new content immediately before \\end{document}.
+                    - Add a comment line % --- Scanned Notes --- before the new content.
+                    - Preserve ALL existing content in the document exactly as-is.
+                    - Fix obvious handwriting/OCR errors using context.
+                    - If text is genuinely illegible, write % [illegible].
+
+                    PACKAGE MANAGEMENT — CRITICAL
+                    - Audit the complete output for every LaTeX command you use.
+                    - Add \\usepackage{amsmath} if you use equation, align, align*, \
+                    frac, sum, int, or any AMS math commands.
+                    - Add \\usepackage{amssymb} if you use \\mathbb, \\mathcal, etc.
+                    - Add \\usepackage{graphicx} if you reference images.
+                    - Add \\usepackage{booktabs} if you use \\toprule, \\midrule, \\bottomrule.
+                    - Add \\usepackage{enumitem} if you use custom list options.
+                    - Add \\usepackage{xcolor} if you use \\textcolor or \\colorbox.
+                    - Add \\usepackage{tcolorbox} if you use tcolorbox environments.
+                    - Add \\usepackage{hyperref} if you add URLs or cross-references.
+                    - Only add packages that are actually needed; do not add superfluous ones.
+                    - Insert all \\usepackage lines in the preamble, before \\begin{document}.
 
                     STRUCTURE RULES
-                    - Use \\section{} for clear top-level headings or main topic titles.
-                    - Use \\subsection{} and \\subsubsection{} for sub-headings.
-                    - Use \\textbf{} for bold key terms, definitions, and any text that was \
-                    underlined, circled, or starred in the original.
-                    - Use \\textit{} for italicized or otherwise emphasized text.
-                    - Use \\begin{itemize}...\\end{itemize} for unordered lists.
-                    - Use \\begin{enumerate}...\\end{enumerate} for numbered lists.
-                    - Use \\medskip or \\bigskip between distinct sections for visual breathing room.
-                    - Use \\begin{tcolorbox}[colback=gray!10, colframe=gray!40] for callout boxes \
-                    if the notes contain boxed or highlighted definitions (omit if not present).
-
-                    MATH RULES
-                    - Use inline math $...$ for all inline expressions, variables, and formulas.
-                    - Use \\begin{equation}...\\end{equation} for single important display equations.
-                    - Use \\begin{align*}...\\end{align*} for multi-line derivations.
-                    - Render fractions with \\frac{}{}, integrals with \\int, sums with \\sum, \
-                    Greek letters with their proper commands (\\alpha, \\beta, \\theta, etc.).
-
-                    CODE RULES
-                    - Use \\begin{verbatim}...\\end{verbatim} for code blocks.
-                    - Use \\texttt{} for inline code or fixed-width identifiers.
-
-                    TABLE RULES
-                    - Use \\begin{tabular}{...}...\\end{tabular} inside a \\begin{table}[h!] for tables.
-                    - Use \\hline for horizontal rules and \\toprule/\\midrule/\\bottomrule if booktabs \
-                    package is implied.
-
-                    CONTENT RULES
-                    - Transcribe EVERY SINGLE word visible. Never skip, omit, summarize, or paraphrase.
-                    - Preserve the original logical order and visual hierarchy of the notes.
-                    - Fix obvious handwriting or OCR recognition errors using context clues.
-                    - If text is genuinely illegible, write % [illegible] as a LaTeX comment.
-                    - Escape all special characters: & → \\&, % → \\%, $ → \\$, # → \\#, \
-                    _ → \\_, { → \\{, } → \\}.
+                    - Use \\section{} for main headings; \\subsection{} for sub-headings.
+                    - Use \\textbf{} for key terms and underlined/starred/circled text.
+                    - Use \\textit{} for italicised text.
+                    - Use itemize for unordered lists; enumerate for numbered lists.
+                    - Use inline math $...$ and display math \\begin{equation}...\\end{equation} \
+                    or \\begin{align*}...\\end{align*}.
+                    - Use \\frac{}{}, \\int, \\sum, Greek letters (\\alpha, \\beta, etc.) properly.
+                    - Use \\begin{verbatim}...\\end{verbatim} or \\texttt{} for code.
+                    - Use tabular inside \\begin{table}[h!] for tables.
+                    - Escape special characters: & → \\&, % → \\%, $ → \\$, \
+                    # → \\#, _ → \\_, { → \\{, } → \\}.
                     """
+
+                    // Build a text block that includes the existing document so
+                    // GPT-4o can see the full preamble and existing body.
+                    let existingBlock: String
+                    if existingLaTeX.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        existingBlock = "% (No existing document — please create a standard article document.)"
+                    } else {
+                        existingBlock = existingLaTeX
+                    }
 
                     var contentBlocks: [[String: Any]] = [
                         [
@@ -238,18 +247,24 @@ final class OpenAIVisionService {
                     let userInstruction: String
                     if rawOCRText.isEmpty {
                         userInstruction = """
-                        Convert everything visible in this image into LaTeX body content. \
-                        Transcribe every word and use the appropriate LaTeX environments. \
-                        Output ONLY valid LaTeX body content — no preamble, no \\begin{document}.
+                        EXISTING LATEX DOCUMENT:
+                        \(existingBlock)
+
+                        Transcribe every word visible in the scanned image above, integrate \
+                        it into the existing document using proper LaTeX formatting, and return \
+                        the COMPLETE compilable document from \\documentclass to \\end{document}.
                         """
                     } else {
                         userInstruction = """
-                        Raw OCR (reading aid — trust the image over this):
+                        EXISTING LATEX DOCUMENT:
+                        \(existingBlock)
+
+                        RAW OCR FROM IMAGE (spelling aid — trust the image for structure):
                         \(rawOCRText)
 
-                        Convert everything visible in this image into LaTeX body content. \
-                        Use the OCR text only as a spelling aid; rely on the image for structure. \
-                        Output ONLY valid LaTeX body content — no preamble, no \\begin{document}.
+                        Transcribe every word visible in the scanned image above, integrate \
+                        it into the existing document using proper LaTeX formatting, and return \
+                        the COMPLETE compilable document from \\documentclass to \\end{document}.
                         """
                     }
                     contentBlocks.append(["type": "text", "text": userInstruction])
