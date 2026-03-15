@@ -31,19 +31,6 @@ struct AppLoadView: View {
     @State private var dragOffset: CGFloat = 0
     private let screenHeight = UIScreen.main.bounds.height
 
-    // MARK: - Dynamic lift shape/shadow (computed from dragOffset)
-
-    /// Top corners become rounded as the card peels up — just like iOS native sheets.
-    private var topCornerRadius: CGFloat {
-        let lifted = max(0, -dragOffset)   // 0 when settled, grows as user swipes up
-        return min(lifted / 3.2, 30)       // ramps 0 → 30 pts over first ~96 pts of lift
-    }
-
-    /// Subtle upward shadow strengthens as the card lifts off the screen.
-    private var liftShadowOpacity: Double {
-        min(0.28, max(0, -dragOffset) / 340.0)
-    }
-
     /// Swipe indicator fades as the user begins dragging.
     private var indicatorOpacity: Double {
         max(0, swipeOpacity - (-dragOffset) / 110)
@@ -134,19 +121,6 @@ struct AppLoadView: View {
                     .padding(.bottom, 54)
             }
         }
-        // ── iOS-sheet lift effect ─────────────────────────────────────────
-        // Top corners round as the card peels away from the screen edge.
-        .clipShape(
-            UnevenRoundedRectangle(
-                topLeadingRadius: topCornerRadius,
-                bottomLeadingRadius: 0,
-                bottomTrailingRadius: 0,
-                topTrailingRadius: topCornerRadius,
-                style: .continuous
-            )
-        )
-        // Upward shadow strengthens as the card lifts, creating a sense of depth.
-        .shadow(color: .black.opacity(liftShadowOpacity), radius: 30, x: 0, y: -10)
         .offset(y: dragOffset)
         .contentShape(Rectangle())
         .gesture(swipeGesture)
