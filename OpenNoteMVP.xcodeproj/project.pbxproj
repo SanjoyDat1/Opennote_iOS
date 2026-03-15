@@ -64,6 +64,7 @@
 		B2000039 /* DocumentScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000147 /* DocumentScannerView.swift */; };
 		B200003A /* ScanResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000148 /* ScanResultView.swift */; };
 		B200003B /* PhotoToTextButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000149 /* PhotoToTextButton.swift */; };
+		B2000050 /* LaTeXScanFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000160 /* LaTeXScanFlow.swift */; };
 		B200003C /* VisionOCRService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200014A /* VisionOCRService.swift */; };
 		B200003D /* OpenAIVisionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200014B /* OpenAIVisionService.swift */; };
 		B200003E /* KeyboardDismissAccessory.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200014C /* KeyboardDismissAccessory.swift */; };
@@ -144,6 +145,7 @@
 		B2000147 /* DocumentScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentScannerView.swift; sourceTree = "<group>"; };
 		B2000148 /* ScanResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanResultView.swift; sourceTree = "<group>"; };
 		B2000149 /* PhotoToTextButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoToTextButton.swift; sourceTree = "<group>"; };
+		B2000160 /* LaTeXScanFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaTeXScanFlow.swift; sourceTree = "<group>"; };
 		B200014A /* VisionOCRService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionOCRService.swift; sourceTree = "<group>"; };
 		B200014B /* OpenAIVisionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIVisionService.swift; sourceTree = "<group>"; };
 		B200014C /* KeyboardDismissAccessory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardDismissAccessory.swift; sourceTree = "<group>"; };
@@ -218,6 +220,7 @@
 				B2000147 /* DocumentScannerView.swift */,
 				B2000148 /* ScanResultView.swift */,
 				B2000149 /* PhotoToTextButton.swift */,
+				B2000160 /* LaTeXScanFlow.swift */,
 			);
 			path = PhotoToText;
 			sourceTree = "<group>";
@@ -512,6 +515,7 @@
 				B2000039 /* DocumentScannerView.swift in Sources */,
 				B200003A /* ScanResultView.swift in Sources */,
 				B200003B /* PhotoToTextButton.swift in Sources */,
+				B2000050 /* LaTeXScanFlow.swift in Sources */,
 				B200003C /* VisionOCRService.swift in Sources */,
 				B200003D /* OpenAIVisionService.swift in Sources */,
 				B200003E /* KeyboardDismissAccessory.swift in Sources */,

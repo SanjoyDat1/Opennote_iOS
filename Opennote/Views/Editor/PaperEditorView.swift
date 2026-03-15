@@ -117,21 +117,7 @@ struct PaperEditorView: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            Button {
-                Haptics.impact(.light)
-                showAISheet = true
-            } label: {
-                Text("Ask Feynman")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .background(Color.opennoteGreen)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-            }
-            .buttonStyle(.plain)
-
-            PhotoToTextButton(noteText: $content)
+            PaperScanButton(content: $content)
 
             Button {
                 Haptics.impact(.light)
@@ -176,13 +162,14 @@ struct PaperEditorView: View {
             } label: {
                 Image("logo")
                     .resizable()
+                    .renderingMode(.template)
                     .scaledToFit()
-                    .frame(width: 22, height: 22)
+                    .frame(width: 30, height: 30)
                     .foregroundStyle(.white)
-                    .frame(width: 56, height: 56)
+                    .frame(width: 68, height: 68)
                     .background(Color.opennoteGreen)
                     .clipShape(Circle())
-                    .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
+                    .shadow(color: Color.opennoteGreen.opacity(0.45), radius: 12, x: 0, y: 6)
             }
             .buttonStyle(.plain)
             .padding(20)

@@ -63,6 +63,7 @@
 		B200003E /* DocumentScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B200013F /* DocumentScannerView.swift */; };
 		B200003F /* ScanResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000140 /* ScanResultView.swift */; };
 		B2000040 /* PhotoToTextButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000141 /* PhotoToTextButton.swift */; };
+		B2000041 /* LaTeXScanFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000142 /* LaTeXScanFlow.swift */; };
 		B2000041 /* VisionOCRService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000142 /* VisionOCRService.swift */; };
 		B2000042 /* OpenAIVisionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000143 /* OpenAIVisionService.swift */; };
 		B2000043 /* InsertionMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000144 /* InsertionMode.swift */; };
@@ -145,6 +146,7 @@
 		B200013F /* DocumentScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentScannerView.swift; sourceTree = "<group>"; };
 		B2000140 /* ScanResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanResultView.swift; sourceTree = "<group>"; };
 		B2000141 /* PhotoToTextButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoToTextButton.swift; sourceTree = "<group>"; };
+		B2000142 /* LaTeXScanFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaTeXScanFlow.swift; sourceTree = "<group>"; };
 		B2000142 /* VisionOCRService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionOCRService.swift; sourceTree = "<group>"; };
 		B2000143 /* OpenAIVisionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIVisionService.swift; sourceTree = "<group>"; };
 		B2000144 /* InsertionMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsertionMode.swift; sourceTree = "<group>"; };
@@ -260,6 +262,7 @@
 				B200013F /* DocumentScannerView.swift */,
 				B2000140 /* ScanResultView.swift */,
 				B2000141 /* PhotoToTextButton.swift */,
+				B2000142 /* LaTeXScanFlow.swift */,
 			);
 			path = PhotoToText;
 			sourceTree = "<group>";
@@ -529,6 +532,7 @@
 				B200003E /* DocumentScannerView.swift in Sources */,
 				B200003F /* ScanResultView.swift in Sources */,
 				B2000040 /* PhotoToTextButton.swift in Sources */,
+				B2000041 /* LaTeXScanFlow.swift in Sources */,
 				B2000041 /* VisionOCRService.swift in Sources */,
 				B2000042 /* OpenAIVisionService.swift in Sources */,
 				B2000043 /* InsertionMode.swift in Sources */,

@@ -50,22 +50,22 @@ private struct LiveWaveformView: View {
 // MARK: - Voice Input Sheet
 
 /// Compact bottom sheet for voice dictation.
-/// While active, each partial transcript is passed to `onLiveUpdate`
-/// so the caller can update the journal block in real time.
+/// Live partial results are streamed to `onLiveUpdate` so the journal block
+/// updates in real time. The user explicitly taps Save or Cancel to finish.
 struct VoiceInputSheet: View {
     @ObservedObject var service: SpeechToTextService
     var insertIntoPrompt: Bool = false
     var onLiveUpdate: ((String) -> Void)? = nil   // fired on every partial result
-    let onInsert: (String) -> Void                // fired when dictation finalises
-    let onDismiss: () -> Void                     // fired on Cancel
-
-    @State private var hasAutoInserted = false
+    let onInsert: (String) -> Void                // fired when user taps Save
+    let onDismiss: () -> Void                     // fired when user taps Cancel
 
     var body: some View {
         VStack(spacing: 0) {
 
             // ── Header ────────────────────────────────────────────
             HStack(alignment: .center) {
+
+                // Cancel — discard everything
                 Button {
                     Haptics.impact(.light)
                     service.stopListening()
@@ -85,11 +85,25 @@ struct VoiceInputSheet: View {
 
                 Spacer()
 
-                // Mirror of "Cancel" for optical centering
-                Text("Cancel")
-                    .font(.system(size: 16, weight: .regular))
-                    .opacity(0)
-                    .allowsHitTesting(false)
+                // Save — stop recording and append to the note
+                Button {
+                    Haptics.impact(.medium)
+                    service.stopListening()
+                    let captured = service.transcribedText
+                    if captured.isEmpty {
+                        onDismiss()
+                    } else {
+                        onInsert(captured)
+                    }
+                } label: {
+                    Text("Save")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color.opennoteGreen)
+                }
+                .buttonStyle(.plain)
+                // Dim while nothing has been transcribed yet
+                .opacity(service.transcribedText.isEmpty ? 0.35 : 1.0)
+                .animation(.easeInOut(duration: 0.2), value: service.transcribedText.isEmpty)
             }
             .padding(.horizontal, 20)
             .padding(.top, 22)
@@ -105,14 +119,6 @@ struct VoiceInputSheet: View {
                     audioLevel: service.audioLevel
                 )
                 .frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    // Tap the waveform to stop and finalise
-                    guard service.isListening else { return }
-                    Haptics.impact(.medium)
-                    service.stopListening()
-                    finalise()
-                }
 
                 // Status label
                 Group {
@@ -126,7 +132,7 @@ struct VoiceInputSheet: View {
                         Text("No speech detected")
                             .foregroundStyle(.secondary)
                     } else {
-                        Text("Tap the waveform to finish")
+                        Text("Tap Save to add to your notes")
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -138,20 +144,11 @@ struct VoiceInputSheet: View {
             .padding(.horizontal, 20)
         }
         .background(Color(.systemBackground))
-        // Fire live updates every time the transcript changes
+        // Stream live transcript updates to the journal block
         .onChange(of: service.transcribedText) { _, newText in
             onLiveUpdate?(newText)
         }
-        // When recognition auto-stops (timeout / error), finalise automatically
-        .onChange(of: service.isListening) { _, isOn in
-            if !isOn && !hasAutoInserted {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                    finalise()
-                }
-            }
-        }
         .onAppear {
-            hasAutoInserted = false
             Task { await service.startListening() }
         }
         .onDisappear {
@@ -161,16 +158,5 @@ struct VoiceInputSheet: View {
         .presentationDragIndicator(.hidden)
         .presentationCornerRadius(24)
         .presentationBackground(.regularMaterial)
-    }
-
-    private func finalise() {
-        guard !hasAutoInserted else { return }
-        hasAutoInserted = true
-        let text = service.transcribedText
-        if !text.isEmpty {
-            onInsert(text)
-        } else {
-            onDismiss()
-        }
     }
 }
