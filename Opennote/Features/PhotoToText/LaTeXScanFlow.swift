@@ -70,8 +70,83 @@ final class LaTeXScanSession {
         }
 
         guard !Task.isCancelled else { return }
+
+        // ── Client-side safety net ─────────────────────────────────────────────
+        // Even if GPT wraps the output in markdown fences or truncates before
+        // \end{document}, we repair it here so pdflatex always gets valid input.
+        generatedLaTeX = sanitizeLaTeX(generatedLaTeX)
+
         phase = .reviewing
         scanTask = nil
+    }
+
+    // MARK: - LaTeX sanitizer
+
+    /// Strips markdown code fences, locates \documentclass, and guarantees
+    /// \end{document} is present and is the very last token.
+    private func sanitizeLaTeX(_ raw: String) -> String {
+        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return raw }
+
+        // 1. Strip opening markdown fence (```latex, ```tex, ```)
+        for fence in ["```latex", "```tex", "```"] {
+            if text.lowercased().hasPrefix(fence) {
+                // Drop the fence line entirely (up to and including the first \n)
+                if let nl = text.firstIndex(of: "\n") {
+                    text = String(text[text.index(after: nl)...])
+                } else {
+                    text = String(text.dropFirst(fence.count))
+                }
+                text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                break
+            }
+        }
+
+        // 2. Strip closing markdown fence
+        if text.hasSuffix("\n```") {
+            text = String(text.dropLast(4)).trimmingCharacters(in: .whitespacesAndNewlines)
+        } else if text.hasSuffix("```") {
+            text = String(text.dropLast(3)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        // 3. Skip any prose the model emitted before \documentclass
+        if let range = text.range(of: "\\documentclass", options: .literal) {
+            text = String(text[range.lowerBound...])
+        }
+
+        // 4. If there is STILL no \documentclass, the model returned body-only LaTeX.
+        //    Wrap it in a minimal compilable document.
+        if !text.contains("\\documentclass") {
+            let body = text
+            text = """
+            \\documentclass[12pt]{article}
+            \\usepackage[utf8]{inputenc}
+            \\usepackage{amsmath, amssymb, amsthm}
+            \\usepackage{graphicx}
+            \\usepackage{geometry}
+            \\geometry{margin=1in}
+            \\begin{document}
+
+            % --- Scanned Notes ---
+            \(body)
+
+            \\end{document}
+            """
+            return text
+        }
+
+        // 5. Ensure there is exactly one \end{document} and it is at the very end.
+        //    If the model truncated before emitting it, append it.
+        let endToken = "\\end{document}"
+        if let lastRange = text.range(of: endToken, options: [.literal, .backwards]) {
+            // Trim anything after the last \end{document}
+            text = String(text[..<lastRange.upperBound])
+        } else {
+            // Not present at all — append it
+            text += "\n\n\\end{document}"
+        }
+
+        return text
     }
 
     func reset() {

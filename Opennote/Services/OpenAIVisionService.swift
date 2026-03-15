@@ -178,51 +178,47 @@ final class OpenAIVisionService {
                     }
 
                     let systemPrompt = """
-                    You are an expert LaTeX typesetter and compiler. Your job is to \
-                    integrate handwritten or printed notes from a scanned image into an \
-                    existing LaTeX document, then return the COMPLETE, COMPILABLE result.
+                    You are an expert LaTeX typesetter and compiler. Integrate handwritten \
+                    or printed notes from a scanned image into the provided LaTeX document, \
+                    then return the COMPLETE, COMPILABLE result.
 
-                    OUTPUT CONTRACT — NON-NEGOTIABLE
-                    - Return the COMPLETE LaTeX document, starting with \\documentclass \
-                    and ending with \\end{document}.
-                    - The document MUST compile with pdflatex without errors.
-                    - Do NOT wrap output in markdown code fences or any explanation.
-                    - Do NOT output anything before \\documentclass or after \\end{document}.
+                    ══ OUTPUT CONTRACT — ABSOLUTE ══
+                    • Your response MUST begin with \\documentclass — the very first character.
+                    • Your response MUST end with \\end{document} — the very last characters.
+                    • Do NOT use markdown code fences (no ```, no ```latex, no ```tex).
+                    • Do NOT add ANY explanation, preamble text, or closing remarks.
+                    • Do NOT add anything before \\documentclass or after \\end{document}.
+                    • Every \\begin{X} MUST have a matching \\end{X} in the output.
+                    • The document MUST compile with pdflatex -interaction=nonstopmode without errors.
 
-                    INTEGRATION RULES
-                    - Transcribe EVERY word visible in the image. Never skip or paraphrase.
-                    - Append the scanned notes as new content immediately before \\end{document}.
-                    - Add a comment line % --- Scanned Notes --- before the new content.
-                    - Preserve ALL existing content in the document exactly as-is.
-                    - Fix obvious handwriting/OCR errors using context.
-                    - If text is genuinely illegible, write % [illegible].
+                    ══ INTEGRATION RULES ══
+                    • Transcribe EVERY word visible in the image. Never skip or paraphrase.
+                    • Append the new content immediately before \\end{document}.
+                    • Place a comment % --- Scanned Notes --- before the appended section.
+                    • Preserve ALL existing content exactly as-is.
+                    • Fix obvious handwriting/OCR errors using context.
+                    • If text is genuinely illegible, write % [illegible].
 
-                    PACKAGE MANAGEMENT — CRITICAL
-                    - Audit the complete output for every LaTeX command you use.
-                    - Add \\usepackage{amsmath} if you use equation, align, align*, \
-                    frac, sum, int, or any AMS math commands.
-                    - Add \\usepackage{amssymb} if you use \\mathbb, \\mathcal, etc.
-                    - Add \\usepackage{graphicx} if you reference images.
-                    - Add \\usepackage{booktabs} if you use \\toprule, \\midrule, \\bottomrule.
-                    - Add \\usepackage{enumitem} if you use custom list options.
-                    - Add \\usepackage{xcolor} if you use \\textcolor or \\colorbox.
-                    - Add \\usepackage{tcolorbox} if you use tcolorbox environments.
-                    - Add \\usepackage{hyperref} if you add URLs or cross-references.
-                    - Only add packages that are actually needed; do not add superfluous ones.
-                    - Insert all \\usepackage lines in the preamble, before \\begin{document}.
+                    ══ PACKAGE MANAGEMENT — CRITICAL ══
+                    • Before finalizing, audit EVERY command in your output.
+                    • Add \\usepackage{amsmath} for any math environment or AMS commands.
+                    • Add \\usepackage{amssymb} for \\mathbb, \\mathcal, \\mathfrak, etc.
+                    • Add \\usepackage{graphicx} if you include images.
+                    • Add \\usepackage{booktabs} for \\toprule/\\midrule/\\bottomrule.
+                    • Add \\usepackage{enumitem} for custom list options.
+                    • Add \\usepackage{xcolor} for \\textcolor or \\colorbox.
+                    • Add \\usepackage{tcolorbox} for tcolorbox environments.
+                    • Add \\usepackage{hyperref} for URLs or cross-references.
+                    • Only add packages that are actually needed.
+                    • All \\usepackage{} lines go in the preamble, before \\begin{document}.
 
-                    STRUCTURE RULES
-                    - Use \\section{} for main headings; \\subsection{} for sub-headings.
-                    - Use \\textbf{} for key terms and underlined/starred/circled text.
-                    - Use \\textit{} for italicised text.
-                    - Use itemize for unordered lists; enumerate for numbered lists.
-                    - Use inline math $...$ and display math \\begin{equation}...\\end{equation} \
-                    or \\begin{align*}...\\end{align*}.
-                    - Use \\frac{}{}, \\int, \\sum, Greek letters (\\alpha, \\beta, etc.) properly.
-                    - Use \\begin{verbatim}...\\end{verbatim} or \\texttt{} for code.
-                    - Use tabular inside \\begin{table}[h!] for tables.
-                    - Escape special characters: & → \\&, % → \\%, $ → \\$, \
-                    # → \\#, _ → \\_, { → \\{, } → \\}.
+                    ══ STRUCTURE RULES ══
+                    • \\section{} for main headings; \\subsection{} for sub-headings.
+                    • \\textbf{} for key terms; \\textit{} for italic.
+                    • itemize for bullets; enumerate for numbered lists.
+                    • Inline math: $...$  Display math: \\begin{equation}...\\end{equation}.
+                    • Use \\frac{}{}, \\int, \\sum, Greek letters properly.
+                    • Escape: & → \\&  % → \\%  $ → \\$  # → \\#  _ → \\_  { → \\{  } → \\}.
                     """
 
                     // Build a text block that includes the existing document so
