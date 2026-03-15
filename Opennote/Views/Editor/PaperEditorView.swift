@@ -249,27 +249,47 @@ struct PaperEditorView: View {
     private func compileAndPreview() {
         isCompiling = true
         compileError = nil
-        let tex = content
+
+        // Run a final sanitization pass immediately before compiling so that even
+        // if the content was edited after the scan, \end{document} is guaranteed.
+        let tex = Self.ensureValidLaTeX(content)
+
         Task {
             do {
-                let encoded = tex.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                let urlString = "https://latexonline.cc/compile?text=\(encoded)&force=true"
-                guard let url = URL(string: urlString) else {
-                    throw NSError(domain: "Paper", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
+                // Package the LaTeX as a gzip-compressed tar archive and POST it
+                // to latexonline.cc's binary compile endpoint.
+                // This avoids the URL-length limit that truncates long documents
+                // and causes "no legal \end found" pdflatex errors.
+                guard let tarData = Self.buildTarGz(texContent: tex) else {
+                    throw NSError(domain: "Paper", code: -1,
+                                  userInfo: [NSLocalizedDescriptionKey: "Could not package the document."])
                 }
-                var request = URLRequest(url: url)
-                request.httpMethod = "GET"
+                guard let url = URL(string: "https://latexonline.cc/compile?command=pdflatex&force=true") else {
+                    throw NSError(domain: "Paper", code: -2)
+                }
+
+                var request = URLRequest(url: url, timeoutInterval: 90)
+                request.httpMethod = "POST"
+                request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+                request.httpBody = tarData
+
                 let (data, response) = try await URLSession.shared.data(for: request)
+
                 await MainActor.run {
                     isCompiling = false
-                    if let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) {
+                    let statusOK = (response as? HTTPURLResponse).map { (200..<300).contains($0.statusCode) } ?? false
+                    // Verify response is actually a PDF (starts with %PDF)
+                    if statusOK, data.prefix(4) == Data("%PDF".utf8) {
                         let temp = FileManager.default.temporaryDirectory
                             .appendingPathComponent(UUID().uuidString + ".pdf")
                         try? data.write(to: temp)
                         pdfURL = temp
                         compileError = nil
                     } else {
-                        compileError = String(data: data, encoding: .utf8) ?? "Compilation failed"
+                        let errText = String(data: data, encoding: .utf8) ?? "Compilation failed."
+                        // Show a friendly summary + the raw pdflatex output
+                        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                        compileError = "LaTeX error (HTTP \(code)):\n\(errText)"
                     }
                 }
             } catch {
@@ -279,6 +299,139 @@ struct PaperEditorView: View {
                 }
             }
         }
+    }
+
+    // MARK: - LaTeX pre-compile sanitizer
+
+    /// Guarantees the string starts with \documentclass and ends with \end{document}.
+    /// Strips markdown code fences that AI models sometimes emit despite instructions.
+    private static func ensureValidLaTeX(_ raw: String) -> String {
+        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return raw }
+
+        // Strip opening code fence (```latex / ```tex / ```)
+        for fence in ["```latex", "```tex", "```"] {
+            if text.lowercased().hasPrefix(fence) {
+                if let nl = text.firstIndex(of: "\n") {
+                    text = String(text[text.index(after: nl)...])
+                } else {
+                    text = String(text.dropFirst(fence.count))
+                }
+                text = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                break
+            }
+        }
+        // Strip closing code fence
+        if text.hasSuffix("\n```") { text = String(text.dropLast(4)).trimmingCharacters(in: .whitespacesAndNewlines) }
+        else if text.hasSuffix("```") { text = String(text.dropLast(3)).trimmingCharacters(in: .whitespacesAndNewlines) }
+
+        // Skip any prose emitted before \documentclass
+        if let r = text.range(of: "\\documentclass", options: .literal) { text = String(text[r.lowerBound...]) }
+
+        // If still no \documentclass, wrap as a minimal document
+        if !text.contains("\\documentclass") {
+            return """
+            \\documentclass[12pt]{article}
+            \\usepackage[utf8]{inputenc}
+            \\usepackage{amsmath,amssymb}
+            \\usepackage{geometry}
+            \\geometry{margin=1in}
+            \\begin{document}
+
+            \(text)
+
+            \\end{document}
+            """
+        }
+
+        // Guarantee \end{document} is the final token
+        let endToken = "\\end{document}"
+        if let r = text.range(of: endToken, options: [.literal, .backwards]) {
+            text = String(text[..<r.upperBound])
+        } else {
+            // Handle partial truncation like \end{documen (stream cut off)
+            for partial in ["\\end{documen", "\\end{docume", "\\end{docum",
+                            "\\end{docu", "\\end{doc", "\\end{do", "\\end{d",
+                            "\\end{", "\\end", "\\en"] {
+                if text.hasSuffix(partial) { text = String(text.dropLast(partial.count)); break }
+            }
+            text += "\n\\end{document}"
+        }
+        return text
+    }
+
+    // MARK: - Tar.gz builder
+
+    /// Creates a gzip-compressed tar archive containing a single `main.tex`.
+    /// Uses the format accepted by `latexonline.cc/compile` POST endpoint.
+    private static func buildTarGz(texContent: String) -> Data? {
+        guard let texData = texContent.data(using: .utf8) else { return nil }
+
+        // ── Build minimal POSIX ustar tar ────────────────────────────────────
+        var tar = Data()
+        var h = [UInt8](repeating: 0, count: 512)
+
+        func write(_ s: String, at off: Int, max n: Int) {
+            for (i, b) in s.utf8.prefix(n).enumerated() { h[off + i] = b }
+        }
+
+        write("main.tex",                                    at: 0,   max: 100) // name
+        write("0000644\0",                                   at: 100, max: 8)   // mode
+        write("0000000\0",                                   at: 108, max: 8)   // uid
+        write("0000000\0",                                   at: 116, max: 8)   // gid
+        write(String(format: "%011o\0", texData.count),      at: 124, max: 12)  // size
+        write(String(format: "%011o\0",
+                     Int(Date().timeIntervalSince1970)),      at: 136, max: 12)  // mtime
+        h[156] = UInt8(ascii: "0")                                               // type: regular
+        write("ustar\0",                                     at: 257, max: 6)   // magic
+        write("00",                                          at: 263, max: 2)   // version
+
+        // Checksum field must be ASCII spaces when summing, then replaced with octal sum
+        for i in 148..<156 { h[i] = UInt8(ascii: " ") }
+        let cksum = h.reduce(0) { $0 + Int($1) }
+        write(String(format: "%06o\0 ", cksum),              at: 148, max: 8)
+
+        tar.append(contentsOf: h)
+        tar.append(texData)
+
+        // Pad file content to 512-byte block boundary
+        let rem = texData.count % 512
+        if rem > 0 { tar.append(contentsOf: [UInt8](repeating: 0, count: 512 - rem)) }
+        // Two zero-filled 512-byte end-of-archive blocks
+        tar.append(contentsOf: [UInt8](repeating: 0, count: 1024))
+
+        // ── Wrap in gzip ─────────────────────────────────────────────────────
+        // NSData.compressed(using: .zlib) gives RFC-1950 zlib: 2-byte header | DEFLATE | 4-byte Adler32.
+        // gzip (RFC-1952) needs raw DEFLATE stream, framed with its own header/trailer.
+        guard let zlibData = try? (tar as NSData).compressed(using: .zlib) as Data,
+              zlibData.count > 6 else { return nil }
+
+        let deflate = zlibData.dropFirst(2).dropLast(4)   // strip zlib envelope
+
+        var gz = Data()
+        gz.append(contentsOf: [0x1f, 0x8b, 0x08, 0x00,    // magic, DEFLATE, no flags
+                                0x00, 0x00, 0x00, 0x00,    // mtime = 0
+                                0x00, 0xff])               // xfl=0, OS=unknown
+        gz.append(deflate)
+
+        var crc = tarCRC32(tar)                            // CRC32 of uncompressed tar
+        withUnsafeBytes(of: &crc)   { gz.append(contentsOf: $0) }
+        var sz = UInt32(tar.count & 0xFFFF_FFFF)           // ISIZE mod 2^32
+        withUnsafeBytes(of: &sz)    { gz.append(contentsOf: $0) }
+
+        return gz
+    }
+
+    /// CRC-32 with polynomial 0xEDB88320 as required by gzip (RFC-1952).
+    private static func tarCRC32(_ data: Data) -> UInt32 {
+        let tbl: [UInt32] = (0..<256).map { n -> UInt32 in
+            var c = UInt32(n)
+            for _ in 0..<8 { c = (c & 1) != 0 ? 0xEDB8_8320 ^ (c >> 1) : c >> 1 }
+            return c
+        }
+        var crc: UInt32 = 0xFFFF_FFFF
+        for b in data { crc = tbl[Int((crc ^ UInt32(b)) & 0xFF)] ^ (crc >> 8) }
+        return crc ^ 0xFFFF_FFFF
     }
 
     private func convertJournalToLaTeX(_ journal: Journal) {
