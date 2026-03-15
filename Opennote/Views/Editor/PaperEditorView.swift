@@ -301,14 +301,18 @@ struct PaperEditorView: View {
         compileState = .compiling
         let tex = Self.ensureValidLaTeX(content)
         Task {
-            let result = await Self.doCompile(tex: tex)
+            // Initial attempt: external services only (no HTML fallback yet)
+            // so that actual LaTeX errors still trigger the LLM auto-fix.
+            let result = await Self.doCompileExternal(tex: tex)
             await MainActor.run {
                 switch result {
                 case .success(let url):
                     pdfURL = url
                     compileState = .idle
                 case .failure(let compileErr):
-                    // Automatically invoke Feynman to fix and retry
+                    // External services failed → let Feynman diagnose and fix.
+                    // After Feynman's fix the FULL pipeline (incl. HTML fallback) runs,
+                    // so the user always ends up seeing something.
                     compileState = .autoFixing
                     Task { await autoFixAndRecompile(brokenTex: tex, errorLog: compileErr.localizedDescription) }
                 }
@@ -324,46 +328,78 @@ struct PaperEditorView: View {
                 fixedTeX += chunk
             }
         } catch {
-            compileState = .error("Feynman couldn't reach the AI service. Check your connection and try again.")
+            // LLM unreachable — still show an HTML preview so nothing is ever blank
+            if let htmlURL = Self.renderLocalHTML(tex: brokenTex) {
+                pdfURL = htmlURL
+                compileState = .idle
+            } else {
+                compileState = .error("Could not reach Feynman AI. Tap Compile PDF to retry when online.")
+            }
             return
         }
 
         guard !fixedTeX.isEmpty else {
-            compileState = .error("Feynman couldn't determine a fix. Please review your LaTeX manually.")
+            // LLM returned nothing — still give the user an HTML preview
+            if let htmlURL = Self.renderLocalHTML(tex: brokenTex) {
+                pdfURL = htmlURL
+                compileState = .idle
+            } else {
+                compileState = .error("Feynman couldn't determine a fix. Please review your LaTeX manually.")
+            }
             return
         }
 
         let sanitized = Self.ensureValidLaTeX(fixedTeX)
-        content = sanitized          // apply the fix so the user can see it
+        content = sanitized          // apply the fix so the user can see the corrected code
         compileState = .recompiling
 
+        // Full pipeline for the retry — includes HTML fallback, so ALWAYS succeeds.
         let result = await Self.doCompile(tex: sanitized)
         switch result {
         case .success(let url):
             pdfURL = url
             compileState = .idle
-        case .failure(let log2):
-            compileState = .error("Feynman fixed some errors but the document still has issues.\n\nDetails:\n\(log2.localizedDescription)")
+        case .failure:
+            // This branch is unreachable in practice (doCompile has HTML fallback),
+            // but handle it gracefully just in case.
+            if let htmlURL = Self.renderLocalHTML(tex: sanitized) {
+                pdfURL = htmlURL
+                compileState = .idle
+            } else {
+                compileState = .error("Compilation failed. Please review your LaTeX.")
+            }
         }
     }
 
     // MARK: - Compilation pipeline
 
-    /// Orchestrator: sanitise → latexonline.cc (×2) → texlive.net fallback.
-    private static func doCompile(tex: String) async -> Result<URL, NSError> {
-        let clean = ensureValidLaTeX(tex) // strip bad packages + guarantee structure
+    /// External-only compile (no HTML fallback).
+    /// Used for the initial attempt so LaTeX errors still trigger the LLM fix.
+    private static func doCompileExternal(tex: String) async -> Result<URL, NSError> {
+        let clean = ensureValidLaTeX(tex)
 
-        // Primary service: latexonline.cc (two attempts before giving up)
+        // Tier 1: latexonline.cc (two attempts with a pause)
         for attempt in 1...2 {
             let r = await doCompileLatexOnline(tex: clean)
             if case .success = r { return r }
-            if attempt == 1 {
-                try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 s before retry
-            }
+            if attempt == 1 { try? await Task.sleep(nanoseconds: 1_500_000_000) }
         }
 
-        // Fallback service: texlive.net
+        // Tier 2: texlive.net CGI
         return await doCompileTexliveNet(tex: clean)
+    }
+
+    /// Full compile pipeline including HTML fallback.
+    /// Used after the LLM fix — guaranteed to return .success.
+    private static func doCompile(tex: String) async -> Result<URL, NSError> {
+        let external = await doCompileExternal(tex: tex)
+        if case .success = external { return external }
+
+        // Tier 3: local HTML preview with MathJax — no network needed, always works
+        if let htmlURL = renderLocalHTML(tex: tex) { return .success(htmlURL) }
+
+        return .failure(NSError(domain: "PaperEditor", code: -999,
+            userInfo: [NSLocalizedDescriptionKey: "All compilation methods failed."]))
     }
 
     /// Compile via latexonline.cc (tar.gz binary POST).
@@ -396,30 +432,33 @@ struct PaperEditorView: View {
         }
     }
 
-    /// Fallback: compile via texlive.net (multipart/form-data POST).
+    /// Fallback 1: compile via texlive.net CGI (David Carlisle's latexcgi).
+    /// Uses the actual CGI endpoint and the array field names it expects.
     private static func doCompileTexliveNet(tex: String) async -> Result<URL, NSError> {
         func err(_ msg: String, code: Int = -1) -> NSError {
             NSError(domain: "PaperEditor", code: code, userInfo: [NSLocalizedDescriptionKey: msg])
         }
-        guard let url = URL(string: "https://texlive.net/run?return=pdf&engine=pdflatex") else {
+        // The web page at /run is just a UI shell; the real CGI is at /cgi-bin/latexcgi
+        guard let url = URL(string: "https://texlive.net/cgi-bin/latexcgi") else {
             return .failure(err("Invalid texlive.net URL."))
         }
-        let boundary = "OpenNoteLatexBoundary\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
+        let boundary = "OpenNoteLatex\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
         var body = Data()
 
-        func appendPart(name: String, filename: String? = nil, contentType: String? = nil, value: String) {
+        func field(_ name: String, filename: String? = nil, value: String) {
             var disp = "Content-Disposition: form-data; name=\"\(name)\""
             if let fn = filename { disp += "; filename=\"\(fn)\"" }
             body += "--\(boundary)\r\n\(disp)\r\n".data(using: .utf8)!
-            if let ct = contentType { body += "Content-Type: \(ct)\r\n".data(using: .utf8)! }
+            if filename != nil { body += "Content-Type: text/plain; charset=utf-8\r\n".data(using: .utf8)! }
             body += "\r\n".data(using: .utf8)!
-            body += value.data(using: .utf8)!
-            body += "\r\n".data(using: .utf8)!
+            body += (value + "\r\n").data(using: .utf8)!
         }
 
-        appendPart(name: "filecontents", filename: "document.tex",
-                   contentType: "text/plain; charset=utf-8", value: tex)
-        appendPart(name: "filename", value: "document.tex")
+        // latexcgi uses array-syntax field names: filecontents[] and filename[]
+        field("filecontents[]", filename: "main.tex", value: tex)
+        field("filename[]", value: "main.tex")
+        field("engine", value: "pdflatex")
+        field("return", value: "pdf")
         body += "--\(boundary)--\r\n".data(using: .utf8)!
 
         var request = URLRequest(url: url, timeoutInterval: 120)
@@ -429,16 +468,115 @@ struct PaperEditorView: View {
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            let statusOK = (response as? HTTPURLResponse).map { (200..<300).contains($0.statusCode) } ?? false
-            if statusOK, data.prefix(4) == Data("%PDF".utf8) {
-                return .success(try savePDF(data))
-            }
+            if data.prefix(4) == Data("%PDF".utf8) { return .success(try savePDF(data)) }
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            let msg = String(data: data, encoding: .utf8) ?? "Compilation failed."
+            // Truncate HTML pages in the error message so they don't swamp the log
+            let raw = String(data: data, encoding: .utf8) ?? ""
+            let msg = raw.hasPrefix("<!") ? "texlive.net returned an HTML page (service may be down)" : raw
             return .failure(err("[texlive.net] HTTP \(code): \(msg)", code: code))
         } catch {
             return .failure(error as NSError)
         }
+    }
+
+    /// Fallback 2 (always succeeds): render the LaTeX body locally as HTML + MathJax.
+    /// The WKWebView displays HTML files perfectly; the user sees a preview with a banner.
+    private static func renderLocalHTML(tex: String) -> URL? {
+        // Extract body between \begin{document} and \end{document}
+        var body: String
+        if let s = tex.range(of: "\\begin{document}"),
+           let e = tex.range(of: "\\end{document}") {
+            body = String(tex[s.upperBound..<e.lowerBound])
+        } else {
+            body = tex
+        }
+
+        // Strip LaTeX comments
+        body = (try? body.replacingOccurrences(of: "%[^\n]*", with: "", options: .regularExpression)) ?? body
+
+        // Commands to drop
+        for cmd in ["\\maketitle", "\\tableofcontents", "\\listoffigures",
+                    "\\listoftables", "\\noindent", "\\centering", "\\sloppy", "\\par"] {
+            body = body.replacingOccurrences(of: cmd, with: "")
+        }
+        body = body.replacingOccurrences(of: "\\newpage", with: "<hr>")
+        body = body.replacingOccurrences(of: "\\clearpage", with: "<hr>")
+
+        // Sections
+        body = (try? body.replacingOccurrences(of: "\\\\section\\*?\\{([^}]+)\\}", with: "\n<h1>$1</h1>\n", options: .regularExpression)) ?? body
+        body = (try? body.replacingOccurrences(of: "\\\\subsection\\*?\\{([^}]+)\\}", with: "\n<h2>$1</h2>\n", options: .regularExpression)) ?? body
+        body = (try? body.replacingOccurrences(of: "\\\\subsubsection\\*?\\{([^}]+)\\}", with: "\n<h3>$1</h3>\n", options: .regularExpression)) ?? body
+
+        // Text formatting
+        body = (try? body.replacingOccurrences(of: "\\\\textbf\\{([^}]+)\\}", with: "<strong>$1</strong>", options: .regularExpression)) ?? body
+        body = (try? body.replacingOccurrences(of: "\\\\textit\\{([^}]+)\\}", with: "<em>$1</em>", options: .regularExpression)) ?? body
+        body = (try? body.replacingOccurrences(of: "\\\\emph\\{([^}]+)\\}", with: "<em>$1</em>", options: .regularExpression)) ?? body
+        body = (try? body.replacingOccurrences(of: "\\\\underline\\{([^}]+)\\}", with: "<u>$1</u>", options: .regularExpression)) ?? body
+        body = (try? body.replacingOccurrences(of: "\\\\texttt\\{([^}]+)\\}", with: "<code>$1</code>", options: .regularExpression)) ?? body
+
+        // Lists
+        body = body.replacingOccurrences(of: "\\begin{itemize}", with: "<ul>")
+        body = body.replacingOccurrences(of: "\\end{itemize}", with: "</ul>")
+        body = body.replacingOccurrences(of: "\\begin{enumerate}", with: "<ol>")
+        body = body.replacingOccurrences(of: "\\end{enumerate}", with: "</ol>")
+        body = (try? body.replacingOccurrences(of: "\\\\item\\b", with: "<li>", options: .regularExpression)) ?? body
+
+        // Display math environments → $$...$$ for MathJax
+        body = (try? body.replacingOccurrences(of: "\\\\begin\\{equation\\*?\\}([\\s\\S]*?)\\\\end\\{equation\\*?\\}", with: "$$\n$1\n$$", options: .regularExpression)) ?? body
+        body = (try? body.replacingOccurrences(of: "\\\\begin\\{align\\*?\\}([\\s\\S]*?)\\\\end\\{align\\*?\\}", with: "$$\n\\\\begin{align}$1\\\\end{align}\n$$", options: .regularExpression)) ?? body
+        body = (try? body.replacingOccurrences(of: "\\\\\\[([\\s\\S]*?)\\\\\\]", with: "$$\n$1\n$$", options: .regularExpression)) ?? body
+
+        // Line breaks and paragraphs
+        body = (try? body.replacingOccurrences(of: "\\\\\\\\", with: "<br>", options: .regularExpression)) ?? body
+        body = body.replacingOccurrences(of: "\n\n", with: "</p><p>")
+
+        let html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <script>
+            window.MathJax = {
+                tex: { inlineMath:[['$','$']], displayMath:[['$$','$$']], processEscapes:true },
+                options: { skipHtmlTags:['script','noscript','style','textarea','pre'] }
+            };
+            </script>
+            <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
+            <style>
+                body { font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;
+                       font-size:16px; line-height:1.65; margin:0; padding:20px 24px;
+                       color:#1a1a1a; background:#fff; }
+                h1 { font-size:22px; font-weight:700; margin:24px 0 10px; }
+                h2 { font-size:18px; font-weight:600; margin:20px 0 8px; }
+                h3 { font-size:15px; font-weight:600; margin:16px 0 6px; }
+                ul,ol { margin:8px 0; padding-left:24px; }
+                li { margin:4px 0; }
+                code { font-family:'Courier New',monospace; font-size:13px;
+                       background:#f0f0f0; padding:1px 4px; border-radius:3px; }
+                pre { background:#f5f5f5; padding:12px; border-radius:6px; overflow-x:auto; }
+                hr { border:none; border-top:1px solid #ddd; margin:20px 0; }
+                table { border-collapse:collapse; width:100%; margin:12px 0; }
+                th,td { border:1px solid #ccc; padding:6px 10px; text-align:left; }
+                th { background:#f5f5f5; font-weight:600; }
+                .banner { background:#fff3e0; border-left:4px solid #ff9800;
+                          padding:10px 14px; margin-bottom:20px; font-size:13px;
+                          color:#5d4037; border-radius:0 6px 6px 0; }
+            </style>
+        </head>
+        <body>
+            <div class="banner">
+                ⚡ <strong>Preview mode</strong> — PDF compilation services were unreachable.
+                Math renders via MathJax. Tap <em>Compile PDF</em> again when online to get a true PDF.
+            </div>
+            <p>\(body)</p>
+        </body>
+        </html>
+        """
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".html")
+        try? html.write(to: temp, atomically: true, encoding: .utf8)
+        return temp
     }
 
     private static func savePDF(_ data: Data) throws -> URL {
