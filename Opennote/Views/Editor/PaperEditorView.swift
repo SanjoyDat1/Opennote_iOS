@@ -1,6 +1,41 @@
 import SwiftUI
 import WebKit
 
+// MARK: - Compile state
+
+enum PaperCompileState: Equatable {
+    case idle
+    case compiling
+    case autoFixing    // Feynman is reading + rewriting the LaTeX
+    case recompiling   // Feynman finished; retrying the compile
+    case error(String) // auto-fix failed — show message, allow manual retry
+
+    var isIdle: Bool { self == .idle }
+
+    var isAutoFixing: Bool {
+        switch self {
+        case .autoFixing, .recompiling: return true
+        default: return false
+        }
+    }
+
+    var overlayStage: String {
+        switch self {
+        case .autoFixing:   return "Feynman spotted a LaTeX error…"
+        case .recompiling:  return "Almost there — recompiling…"
+        default:            return ""
+        }
+    }
+
+    var overlaySubtitle: String {
+        switch self {
+        case .autoFixing:   return "Feynman is analyzing and fixing your document automatically."
+        case .recompiling:  return "Applying the fix and generating your PDF."
+        default:            return ""
+        }
+    }
+}
+
 /// Paper editor: LaTeX code editor + live PDF preview. Split view with Compile, AI, notes-to-PDF.
 struct PaperEditorView: View {
     let paper: Paper
@@ -13,8 +48,7 @@ struct PaperEditorView: View {
     @State private var editedTitle: String
     @FocusState private var isEditorFocused: Bool
     @State private var pdfURL: URL?
-    @State private var isCompiling = false
-    @State private var compileError: String?
+    @State private var compileState: PaperCompileState = .idle
     @State private var showSettingsSheet = false
     @State private var showAISheet = false
     @State private var showNotesToPDFSheet = false
@@ -32,6 +66,7 @@ struct PaperEditorView: View {
     }
 
     var body: some View {
+        ZStack {
         VStack(spacing: 0) {
             topBar
             if UIDevice.current.userInterfaceIdiom == .pad {
@@ -71,8 +106,18 @@ struct PaperEditorView: View {
             }
         }
         .background(Color.opennoteCream)
-        .navigationBarBackButtonHidden(true)
-        .toolbar {
+
+        // ── Auto-fix overlay (inside ZStack, floats above the VStack) ──
+        if compileState.isAutoFixing {
+            LaTeXAutoFixOverlay(state: compileState)
+                .transition(.opacity.animation(.easeInOut(duration: 0.35)))
+                .zIndex(99)
+        }
+    } // end ZStack
+    .animation(.easeInOut(duration: 0.3), value: compileState.isAutoFixing)
+    .background(Color.opennoteCream)
+    .navigationBarBackButtonHidden(true)
+    .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 KeyboardDismissAccessory(onDismiss: { isEditorFocused = false })
             }
@@ -193,16 +238,21 @@ struct PaperEditorView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            if let err = compileError {
+            if case .error(let msg) = compileState {
                 VStack {
                     Spacer()
-                    Text(err)
-                        .font(.system(size: 13))
-                        .foregroundStyle(.red)
-                        .padding()
-                        .background(Color.red.opacity(0.1))
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                        .padding()
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Compilation failed", systemImage: "xmark.circle.fill")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.red)
+                        Text(msg)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding()
+                    .background(Color.red.opacity(0.08))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .padding()
                     Spacer()
                 }
             }
@@ -221,7 +271,7 @@ struct PaperEditorView: View {
                 compileAndPreview()
             } label: {
                 HStack(spacing: 8) {
-                    if isCompiling {
+                    if compileState == .compiling {
                         ProgressView()
                             .scaleEffect(0.9)
                             .tint(.white)
@@ -229,7 +279,7 @@ struct PaperEditorView: View {
                         Image(systemName: "doc.fill")
                             .font(.system(size: 18, weight: .medium))
                     }
-                    Text(isCompiling ? "Compiling…" : "Compile PDF")
+                    Text(compileState == .compiling ? "Compiling…" : "Compile PDF")
                         .font(.system(size: 15, weight: .semibold))
                 }
                 .foregroundStyle(.white)
@@ -240,64 +290,96 @@ struct PaperEditorView: View {
                 .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
             }
             .buttonStyle(.plain)
-            .disabled(isCompiling || content.trimmingCharacters(in: .whitespaces).isEmpty)
+            .disabled(!compileState.isIdle || content.trimmingCharacters(in: .whitespaces).isEmpty)
             .opacity(content.trimmingCharacters(in: .whitespaces).isEmpty ? 0.6 : 1)
             .padding(20)
         }
     }
 
     private func compileAndPreview() {
-        isCompiling = true
-        compileError = nil
-
-        // Run a final sanitization pass immediately before compiling so that even
-        // if the content was edited after the scan, \end{document} is guaranteed.
+        guard compileState.isIdle else { return }
+        compileState = .compiling
         let tex = Self.ensureValidLaTeX(content)
-
         Task {
-            do {
-                // Package the LaTeX as a gzip-compressed tar archive and POST it
-                // to latexonline.cc's binary compile endpoint.
-                // This avoids the URL-length limit that truncates long documents
-                // and causes "no legal \end found" pdflatex errors.
-                guard let tarData = Self.buildTarGz(texContent: tex) else {
-                    throw NSError(domain: "Paper", code: -1,
-                                  userInfo: [NSLocalizedDescriptionKey: "Could not package the document."])
-                }
-                guard let url = URL(string: "https://latexonline.cc/compile?command=pdflatex&force=true") else {
-                    throw NSError(domain: "Paper", code: -2)
-                }
-
-                var request = URLRequest(url: url, timeoutInterval: 90)
-                request.httpMethod = "POST"
-                request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
-                request.httpBody = tarData
-
-                let (data, response) = try await URLSession.shared.data(for: request)
-
-                await MainActor.run {
-                    isCompiling = false
-                    let statusOK = (response as? HTTPURLResponse).map { (200..<300).contains($0.statusCode) } ?? false
-                    // Verify response is actually a PDF (starts with %PDF)
-                    if statusOK, data.prefix(4) == Data("%PDF".utf8) {
-                        let temp = FileManager.default.temporaryDirectory
-                            .appendingPathComponent(UUID().uuidString + ".pdf")
-                        try? data.write(to: temp)
-                        pdfURL = temp
-                        compileError = nil
-                    } else {
-                        let errText = String(data: data, encoding: .utf8) ?? "Compilation failed."
-                        // Show a friendly summary + the raw pdflatex output
-                        let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-                        compileError = "LaTeX error (HTTP \(code)):\n\(errText)"
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    isCompiling = false
-                    compileError = error.localizedDescription
+            let result = await Self.doCompile(tex: tex)
+            await MainActor.run {
+                switch result {
+                case .success(let url):
+                    pdfURL = url
+                    compileState = .idle
+                case .failure(let compileErr):
+                    // Automatically invoke Feynman to fix and retry
+                    compileState = .autoFixing
+                    Task { await autoFixAndRecompile(brokenTex: tex, errorLog: compileErr.localizedDescription) }
                 }
             }
+        }
+    }
+
+    @MainActor
+    private func autoFixAndRecompile(brokenTex: String, errorLog: String) async {
+        var fixedTeX = ""
+        do {
+            for try await chunk in OpenAIService.shared.fixLaTeXErrors(tex: brokenTex, errorLog: errorLog) {
+                fixedTeX += chunk
+            }
+        } catch {
+            compileState = .error("Feynman couldn't reach the AI service. Check your connection and try again.")
+            return
+        }
+
+        guard !fixedTeX.isEmpty else {
+            compileState = .error("Feynman couldn't determine a fix. Please review your LaTeX manually.")
+            return
+        }
+
+        let sanitized = Self.ensureValidLaTeX(fixedTeX)
+        content = sanitized          // apply the fix so the user can see it
+        compileState = .recompiling
+
+        let result = await Self.doCompile(tex: sanitized)
+        switch result {
+        case .success(let url):
+            pdfURL = url
+            compileState = .idle
+        case .failure(let log2):
+            compileState = .error("Feynman fixed some errors but the document still has issues.\n\nDetails:\n\(log2.localizedDescription)")
+        }
+    }
+
+    // MARK: - Shared compile helper
+
+    private static func doCompile(tex: String) async -> Result<URL, NSError> {
+        func err(_ msg: String, code: Int = -1) -> NSError {
+            NSError(domain: "PaperEditor", code: code,
+                    userInfo: [NSLocalizedDescriptionKey: msg])
+        }
+        guard let tarData = buildTarGz(texContent: tex) else {
+            return .failure(err("Could not package the LaTeX document."))
+        }
+        guard let url = URL(string: "https://latexonline.cc/compile?command=pdflatex&force=true") else {
+            return .failure(err("Invalid compilation URL."))
+        }
+        var request = URLRequest(url: url, timeoutInterval: 90)
+        request.httpMethod = "POST"
+        request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+        request.httpBody = tarData
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let statusOK = (response as? HTTPURLResponse).map { (200..<300).contains($0.statusCode) } ?? false
+            if statusOK, data.prefix(4) == Data("%PDF".utf8) {
+                let temp = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(UUID().uuidString + ".pdf")
+                try? data.write(to: temp)
+                return .success(temp)
+            } else {
+                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                let errText = String(data: data, encoding: .utf8) ?? "Compilation failed."
+                return .failure(err("HTTP \(code): \(errText)", code: code))
+            }
+        } catch {
+            return .failure(error as NSError)
         }
     }
 
@@ -700,6 +782,108 @@ private struct PaperAISheet: View {
             } else {
                 errorMessage = "Feynman couldn't complete the edit. Please try again."
             }
+        }
+    }
+}
+
+// MARK: - Auto-fix overlay
+
+private struct LaTeXAutoFixOverlay: View {
+    let state: PaperCompileState
+
+    @State private var logoRotation: Double = -8
+    @State private var logoOffset: CGFloat = 0
+    @State private var dot1Opacity: Double = 0.2
+    @State private var dot2Opacity: Double = 0.2
+    @State private var dot3Opacity: Double = 0.2
+    @State private var haloScale: CGFloat = 0.95
+    @State private var haloOpacity: Double = 0.4
+
+    var body: some View {
+        ZStack {
+            // Blurred background
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .ignoresSafeArea()
+
+            // Ambient green halo
+            Circle()
+                .fill(Color.opennoteGreen.opacity(0.18))
+                .frame(width: 280, height: 280)
+                .scaleEffect(haloScale)
+                .opacity(haloOpacity)
+                .blur(radius: 30)
+
+            VStack(spacing: 28) {
+                // Animated Feynman logo
+                ZStack {
+                    Circle()
+                        .fill(Color.opennoteGreen.opacity(0.12))
+                        .frame(width: 110, height: 110)
+                        .scaleEffect(haloScale)
+                    Image("logo")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 64, height: 64)
+                        .rotationEffect(.degrees(logoRotation))
+                        .offset(y: logoOffset)
+                }
+
+                // Stage text
+                VStack(spacing: 8) {
+                    Text(state.overlayStage)
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+                        .multilineTextAlignment(.center)
+                        .id(state.overlayStage) // triggers transition
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+
+                    Text(state.overlaySubtitle)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 36)
+                        .id(state.overlaySubtitle)
+                        .transition(.opacity)
+                }
+                .animation(.easeInOut(duration: 0.5), value: state.overlayStage)
+
+                // Animated dots
+                HStack(spacing: 8) {
+                    ForEach(Array([dot1Opacity, dot2Opacity, dot3Opacity].enumerated()), id: \.offset) { i, op in
+                        Circle()
+                            .fill(Color.opennoteGreen)
+                            .frame(width: 8, height: 8)
+                            .opacity(op)
+                    }
+                }
+            }
+            .padding(40)
+        }
+        .onAppear { startAnimations() }
+    }
+
+    private func startAnimations() {
+        // Logo sway
+        withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
+            logoRotation = 8
+            logoOffset = -6
+        }
+        // Halo pulse
+        withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
+            haloScale = 1.1
+            haloOpacity = 0.7
+        }
+        // Dots cascade
+        let base = 0.5
+        withAnimation(.easeInOut(duration: base).repeatForever(autoreverses: true).delay(0.0)) {
+            dot1Opacity = 1.0
+        }
+        withAnimation(.easeInOut(duration: base).repeatForever(autoreverses: true).delay(0.2)) {
+            dot2Opacity = 1.0
+        }
+        withAnimation(.easeInOut(duration: base).repeatForever(autoreverses: true).delay(0.4)) {
+            dot3Opacity = 1.0
         }
     }
 }

@@ -213,6 +213,95 @@ final class OpenAIService {
         return resized.jpegData(compressionQuality: 0.82)?.base64EncodedString()
     }
 
+    // MARK: - LaTeX auto-fix
+
+    /// Streams back a corrected, compilable LaTeX document given the broken source
+    /// and the raw pdflatex error log. Called automatically on compilation failure.
+    func fixLaTeXErrors(tex: String, errorLog: String) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            Task {
+                guard isConfigured else {
+                    continuation.finish(throwing: OpenAIError.requestFailed)
+                    return
+                }
+                do {
+                    let url = baseURL.appending(path: "chat/completions")
+                    var request = URLRequest(url: url, timeoutInterval: 90)
+                    request.httpMethod = "POST"
+                    request.setValue("Bearer \(OpenAIConfig.apiKey)", forHTTPHeaderField: "Authorization")
+                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+                    let system = """
+                    You are an expert LaTeX compiler and debugger. The user will give you a LaTeX \
+                    source document that failed to compile and the pdflatex error log.
+
+                    YOUR TASK:
+                    • Read the error log carefully and identify every error.
+                    • Fix ALL errors in the document so it compiles cleanly with pdflatex.
+                    • Common fixes: add missing \\usepackage{}, close unclosed environments, \
+                    escape special characters (& % $ # _ { }), fix malformed commands, \
+                    remove duplicate \\end{document}, ensure exactly one \\begin{document} / \\end{document}.
+
+                    OUTPUT CONTRACT — ABSOLUTE:
+                    • Return the COMPLETE fixed LaTeX document, starting with \\documentclass.
+                    • The very last line must be \\end{document}.
+                    • Do NOT wrap in markdown code fences.
+                    • Do NOT add any explanation before \\documentclass or after \\end{document}.
+                    • Every \\begin{X} must have a matching \\end{X}.
+                    """
+
+                    let user = """
+                    PDFLATEX ERROR LOG:
+                    \(errorLog)
+
+                    BROKEN LATEX SOURCE:
+                    \(tex)
+
+                    Return the complete fixed LaTeX document now:
+                    """
+
+                    let body: [String: Any] = [
+                        "model": "gpt-4o",
+                        "messages": [
+                            ["role": "system", "content": system],
+                            ["role": "user", "content": user]
+                        ],
+                        "stream": true,
+                        "max_tokens": 16384
+                    ]
+                    request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+                    let (bytes, response) = try await URLSession.shared.bytes(for: request)
+                    guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                        continuation.finish(throwing: OpenAIError.requestFailed)
+                        return
+                    }
+                    var buf: [UInt8] = []
+                    for try await byte in bytes {
+                        if byte == 10 {
+                            if let line = String(bytes: buf, encoding: .utf8) {
+                                let t = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                                if t.hasPrefix("data: ") {
+                                    let js = String(t.dropFirst(6))
+                                    if js == "[DONE]" { break }
+                                    if let d = js.data(using: .utf8),
+                                       let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+                                       let ch = (j["choices"] as? [[String: Any]])?.first,
+                                       let txt = (ch["delta"] as? [String: Any])?["content"] as? String,
+                                       !txt.isEmpty { continuation.yield(txt) }
+                                }
+                            }
+                            buf = []
+                        } else if byte != 13 { buf.append(byte) }
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+        }
+    }
+
     /// Edit LaTeX content based on user instruction. Returns modified LaTeX or nil on failure.
     func editLaTeX(tex: String, instruction: String) async -> String? {
         guard isConfigured else { return nil }
