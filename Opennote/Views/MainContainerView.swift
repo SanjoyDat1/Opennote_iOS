@@ -7,6 +7,11 @@ struct MainContainerView: View {
     @State private var showInbox = false
     @State private var selectedJournal: Journal?
     @State private var selectedPaper: Paper?
+
+    // Name-prompt state
+    @State private var showNewJournalAlert = false
+    @State private var showNewPaperAlert = false
+    @State private var pendingName = ""
     
     var body: some View {
         NavigationStack {
@@ -76,6 +81,23 @@ struct MainContainerView: View {
                 .sheet(isPresented: $showInbox) {
                     InboxView(isPresented: $showInbox)
                 }
+                // ── Name prompts ─────────────────────────────────────────
+                .alert("New Journal", isPresented: $showNewJournalAlert) {
+                    TextField("Journal name", text: $pendingName)
+                        .autocorrectionDisabled(false)
+                    Button("Create") { confirmCreateJournal() }
+                    Button("Cancel", role: .cancel) { pendingName = "" }
+                } message: {
+                    Text("Give your journal a name to get started.")
+                }
+                .alert("New Paper", isPresented: $showNewPaperAlert) {
+                    TextField("Paper name", text: $pendingName)
+                        .autocorrectionDisabled(false)
+                    Button("Create") { confirmCreatePaper() }
+                    Button("Cancel", role: .cancel) { pendingName = "" }
+                } message: {
+                    Text("Give your paper a name to get started.")
+                }
                 
                 // Sidebar overlay
                 if showSidebar {
@@ -130,18 +152,34 @@ struct MainContainerView: View {
         }
     }
     
+    // Shows the name-prompt alert.
     private func createJournal() {
         Haptics.impact(.light)
-        let journal = Journal(title: "Untitled Journal")
-        notesStore.addJournal(journal)
-        selectedJournal = journal
+        pendingName = ""
+        showNewJournalAlert = true
     }
-    
+
     private func createPaper() {
         Haptics.impact(.light)
-        let paper = Paper(title: "Untitled Paper", content: PaperTemplate.defaultContent)
+        pendingName = ""
+        showNewPaperAlert = true
+    }
+
+    // Called after the user confirms the name in the alert.
+    private func confirmCreateJournal() {
+        let title = pendingName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let journal = Journal(title: title.isEmpty ? "Untitled Journal" : title)
+        notesStore.addJournal(journal)
+        selectedJournal = journal
+        pendingName = ""
+    }
+
+    private func confirmCreatePaper() {
+        let title = pendingName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let paper = Paper(title: title.isEmpty ? "Untitled Paper" : title, content: PaperTemplate.defaultContent)
         notesStore.addPaper(paper)
         selectedPaper = paper
+        pendingName = ""
     }
 }
 

@@ -80,6 +80,35 @@ final class NotesStore {
         try? FileManager.default.removeItem(at: blocksURL(for: id))
     }
 
+    /// Returns a short plain-text preview extracted from the first meaningful blocks.
+    /// Returns nil if no content has been saved yet.
+    func loadPreview(forJournalId id: String) -> String? {
+        guard let blocks = loadBlocks(forJournalId: id) else { return nil }
+        var snippets: [String] = []
+        var charCount = 0
+        for block in blocks {
+            let text = blockPreviewText(block)
+            guard !text.isEmpty else { continue }
+            snippets.append(text)
+            charCount += text.count
+            if charCount >= 200 { break }
+        }
+        let joined = snippets.joined(separator: "  ·  ")
+        return joined.isEmpty ? nil : String(joined.prefix(220))
+    }
+
+    private func blockPreviewText(_ block: NoteBlock) -> String {
+        switch block.blockType {
+        case .paragraph(let t):        return t.trimmingCharacters(in: .whitespacesAndNewlines)
+        case .heading(_, let t):       return t.trimmingCharacters(in: .whitespacesAndNewlines)
+        case .callout(let t):          return t.trimmingCharacters(in: .whitespacesAndNewlines)
+        case .bulletList(let items):   return items.filter { !$0.isEmpty }.joined(separator: " · ")
+        case .numberedList(let items): return items.filter { !$0.isEmpty }.joined(separator: " · ")
+        case .todo(let items):         return items.map(\.text).filter { !$0.isEmpty }.joined(separator: " · ")
+        default: return ""
+        }
+    }
+
     // MARK: - Metadata persistence
 
     private func save() {

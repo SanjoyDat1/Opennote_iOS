@@ -24,9 +24,12 @@ struct HomeView: View {
     var onRenamePaper: ((Paper) -> Void)?
     var onFavoriteJournal: ((Journal) -> Void)?
     var onFavoritePaper: ((Paper) -> Void)?
-    
+
+    @Environment(NotesStore.self) private var notesStore
     @State private var filter: HomeFilter = .all
     @State private var viewMode: HomeViewMode = .grid
+    /// Cached text previews keyed by journal.id — loaded from disk on appear.
+    @State private var journalPreviews: [String: String] = [:]
     
     var body: some View {
         ScrollView {
@@ -106,6 +109,18 @@ struct HomeView: View {
             .padding(.bottom, 32)
         }
         .background(Color.opennoteCream)
+        .task { loadPreviews() }
+        .onChange(of: journals) { _, _ in loadPreviews() }
+    }
+
+    private func loadPreviews() {
+        var updated: [String: String] = [:]
+        for journal in journals {
+            if let text = notesStore.loadPreview(forJournalId: journal.id) {
+                updated[journal.id] = text
+            }
+        }
+        journalPreviews = updated
     }
     
     private var allContent: some View {
@@ -220,6 +235,7 @@ struct HomeView: View {
                 ForEach(journals) { journal in
                     JournalLargeCard(
                         journal: journal,
+                        previewText: journalPreviews[journal.id],
                         onTap: { onSelectJournal(journal) },
                         onDelete: { onDeleteJournal?(journal.id) },
                         onRename: onRenameJournal,
@@ -625,6 +641,41 @@ struct JournalCard: View {
             Text("This journal and all its notes will be permanently deleted and cannot be recovered.")
         }
     }
+
+    // MARK: - Preview window subview
+    @ViewBuilder
+    private func notePreviewWindow(_ text: String) -> some View {
+        ZStack(alignment: .bottom) {
+            Text(text)
+                .font(.system(size: 13, weight: .regular))
+                .foregroundStyle(Color(.systemGray))
+                .lineSpacing(4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                // Gradient mask — text fully visible at top, fades to transparent near bottom
+                .mask(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .black, location: 0),
+                            .init(color: .black, location: 0.55),
+                            .init(color: .clear, location: 1.0)
+                        ],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                )
+                .lineLimit(4)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(.systemGray6).opacity(0.55))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .strokeBorder(Color(.systemGray4).opacity(0.35), lineWidth: 0.5)
+                        )
+                )
+        }
+    }
 }
 
 struct JournalListRow: View {
@@ -809,6 +860,7 @@ struct PaperCompactCard: View {
 
 struct JournalLargeCard: View {
     let journal: Journal
+    var previewText: String? = nil
     let onTap: () -> Void
     var onDelete: (() -> Void)?
     var onRename: ((Journal) -> Void)?
@@ -821,6 +873,7 @@ struct JournalLargeCard: View {
     var body: some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 10) {
+                // Header row — title, date, menu
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(journal.title)
@@ -866,9 +919,14 @@ struct JournalLargeCard: View {
                     }
                 }
 
-                // Spacer gives the card vertical weight — like a real notebook page
-                Spacer(minLength: 48)
+                // ── Note preview window ───────────────────────────────────
+                if let preview = previewText, !preview.isEmpty {
+                    notePreviewWindow(preview)
+                } else {
+                    Spacer(minLength: 44)
+                }
 
+                // Footer row
                 HStack {
                     if journal.isFavorite {
                         Image(systemName: "star.fill")
@@ -924,6 +982,40 @@ struct JournalLargeCard: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This journal and all its notes will be permanently deleted and cannot be recovered.")
+        }
+    }
+
+    // MARK: - Preview window subview
+    @ViewBuilder
+    private func notePreviewWindow(_ text: String) -> some View {
+        ZStack(alignment: .bottom) {
+            Text(text)
+                .font(.system(size: 13, weight: .regular))
+                .foregroundStyle(Color(.systemGray))
+                .lineSpacing(4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .mask(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .black, location: 0),
+                            .init(color: .black, location: 0.55),
+                            .init(color: .clear, location: 1.0)
+                        ],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                )
+                .lineLimit(4)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(.systemGray6).opacity(0.55))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .strokeBorder(Color(.systemGray4).opacity(0.35), lineWidth: 0.5)
+                        )
+                )
         }
     }
 }
