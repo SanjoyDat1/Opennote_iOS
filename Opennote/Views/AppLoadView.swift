@@ -1,21 +1,20 @@
 import SwiftUI
 
-/// Cinematic load screen — logo rises from center, text fades in,
-/// mandatory swipe-up curtain to enter.
+/// Cinematic splash screen — rises in, then peels away like an iOS card when the
+/// user swipes up, revealing the app content behind it.
 struct AppLoadView: View {
     let onComplete: () -> Void
 
     // MARK: - Logo
     @State private var logoOpacity: Double = 0
-    @State private var logoRise: CGFloat = 50        // starts 50 pts below final position
+    @State private var logoRise: CGFloat = 50
     @State private var logoScale: CGFloat = 0.72
     @State private var floatY: CGFloat = 0
     @State private var tilt: Double = 0
 
-    // MARK: - Glow
+    // MARK: - Glow (soft bloom — no hard ring)
     @State private var glowOpacity: Double = 0
     @State private var glowPulse: CGFloat = 1.0
-    @State private var ringPulse: CGFloat = 1.0
     @State private var bgHaloOpacity: Double = 0
 
     // MARK: - Text
@@ -28,67 +27,78 @@ struct AppLoadView: View {
     @State private var swipeOpacity: Double = 0
     @State private var chevronY: CGFloat = 0
 
-    // MARK: - Drag to dismiss
+    // MARK: - Swipe-to-dismiss state
     @State private var dragOffset: CGFloat = 0
     private let screenHeight = UIScreen.main.bounds.height
+
+    // MARK: - Dynamic lift shape/shadow (computed from dragOffset)
+
+    /// Top corners become rounded as the card peels up — just like iOS native sheets.
+    private var topCornerRadius: CGFloat {
+        let lifted = max(0, -dragOffset)   // 0 when settled, grows as user swipes up
+        return min(lifted / 3.2, 30)       // ramps 0 → 30 pts over first ~96 pts of lift
+    }
+
+    /// Subtle upward shadow strengthens as the card lifts off the screen.
+    private var liftShadowOpacity: Double {
+        min(0.28, max(0, -dragOffset) / 340.0)
+    }
+
+    /// Swipe indicator fades as the user begins dragging.
+    private var indicatorOpacity: Double {
+        max(0, swipeOpacity - (-dragOffset) / 110)
+    }
 
     var body: some View {
         ZStack {
             // ── Background ────────────────────────────────────────────────
             Color.opennoteCream.ignoresSafeArea()
 
-            // Ambient center halo
+            // Large soft ambient halo in the center (NOT a ring — just a glow)
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [Color.opennoteGreen.opacity(0.12), .clear],
-                        center: .center, startRadius: 0, endRadius: 260
+                        colors: [Color.opennoteGreen.opacity(0.11), .clear],
+                        center: .center, startRadius: 0, endRadius: 280
                     )
                 )
-                .frame(width: 600, height: 600)
+                .frame(width: 620, height: 620)
                 .opacity(bgHaloOpacity)
                 .allowsHitTesting(false)
 
-            // ── Main content (always centered) ────────────────────────────
+            // ── Main content — always centered ────────────────────────────
             VStack(spacing: 0) {
                 Spacer()
 
-                // Logo + glow zone
+                // Logo + soft glow bloom (no stroke ring)
                 ZStack {
-                    // Soft outer ring
-                    Circle()
-                        .strokeBorder(Color.opennoteGreen.opacity(0.18), lineWidth: 1.5)
-                        .frame(width: 190, height: 190)
-                        .scaleEffect(ringPulse)
-                        .opacity(glowOpacity * 0.8)
-
-                    // Radial glow bloom
+                    // Soft radial glow behind the logo
                     Circle()
                         .fill(
                             RadialGradient(
-                                colors: [Color.opennoteGreen.opacity(0.32), .clear],
+                                colors: [Color.opennoteGreen.opacity(0.30), .clear],
                                 center: .center, startRadius: 0, endRadius: 90
                             )
                         )
-                        .frame(width: 210, height: 210)
+                        .frame(width: 220, height: 220)
                         .scaleEffect(glowPulse)
                         .opacity(glowOpacity)
-                        .blur(radius: 22)
+                        .blur(radius: 24)
 
-                    // Paper airplane ✈
+                    // Paper airplane
                     Image("logo")
                         .resizable()
                         .renderingMode(.template)
                         .scaledToFit()
                         .frame(width: 88, height: 88)
                         .foregroundStyle(Color.opennoteGreen)
-                        .shadow(color: Color.opennoteGreen.opacity(0.50), radius: 24, x: 0, y: 8)
+                        .shadow(color: Color.opennoteGreen.opacity(0.48), radius: 22, x: 0, y: 8)
                         .offset(y: floatY)
                         .rotationEffect(.degrees(tilt))
                 }
                 .opacity(logoOpacity)
                 .scaleEffect(logoScale)
-                .offset(y: logoRise)  // rises upward into final position
+                .offset(y: logoRise)
                 .frame(height: 210)
 
                 // "Opennote"
@@ -116,14 +126,27 @@ struct AppLoadView: View {
             }
             .frame(maxWidth: .infinity)
 
-            // ── Swipe-up indicator (bottom) ───────────────────────────────
+            // ── Swipe-up indicator ────────────────────────────────────────
             VStack {
                 Spacer()
                 swipeUpIndicator
-                    .opacity(max(0, swipeOpacity - dragOffset / 130))
+                    .opacity(indicatorOpacity)
                     .padding(.bottom, 54)
             }
         }
+        // ── iOS-sheet lift effect ─────────────────────────────────────────
+        // Top corners round as the card peels away from the screen edge.
+        .clipShape(
+            UnevenRoundedRectangle(
+                topLeadingRadius: topCornerRadius,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: topCornerRadius,
+                style: .continuous
+            )
+        )
+        // Upward shadow strengthens as the card lifts, creating a sense of depth.
+        .shadow(color: .black.opacity(liftShadowOpacity), radius: 30, x: 0, y: -10)
         .offset(y: dragOffset)
         .contentShape(Rectangle())
         .gesture(swipeGesture)
@@ -147,25 +170,30 @@ struct AppLoadView: View {
         }
     }
 
-    // MARK: - Swipe gesture
+    // MARK: - Gesture
 
     private var swipeGesture: some Gesture {
-        DragGesture(minimumDistance: 20)
+        DragGesture(minimumDistance: 16)
             .onChanged { value in
                 let t = value.translation.height
-                if t < 0 { dragOffset = t * 0.38 }
+                // Only upward drag (negative t) triggers lift; rubber-band resistance
+                if t < 0 { dragOffset = t * 0.40 }
             }
             .onEnded { value in
                 let dy = value.translation.height
                 let vy = value.predictedEndTranslation.height
-                if dy < -60 || vy < -180 {
+                if dy < -55 || vy < -170 {
+                    // Dismiss — card flies off the top like a native iOS sheet
                     Haptics.impact(.medium)
-                    withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) {
+                    withAnimation(.spring(response: 0.40, dampingFraction: 0.80)) {
                         dragOffset = -screenHeight * 1.1
                     }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.38) { onComplete() }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.34) { onComplete() }
                 } else {
-                    withAnimation(.spring(response: 0.36, dampingFraction: 0.72)) { dragOffset = 0 }
+                    // Snap back — spring returns the card to rest position
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.72)) {
+                        dragOffset = 0
+                    }
                 }
             }
     }
@@ -203,7 +231,7 @@ struct AppLoadView: View {
             swipeOpacity = 1
         }
 
-        // Phase 6 — Idle float loop (starts after everything is settled)
+        // Phase 6 — Idle float loop
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             withAnimation(.easeInOut(duration: 2.5).repeatForever(autoreverses: true)) {
                 floatY = -15
@@ -211,9 +239,6 @@ struct AppLoadView: View {
             }
             withAnimation(.easeInOut(duration: 1.9).repeatForever(autoreverses: true)) {
                 glowPulse = 1.18
-            }
-            withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) {
-                ringPulse = 1.20
             }
         }
 
