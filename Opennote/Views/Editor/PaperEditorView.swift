@@ -1,5 +1,4 @@
 import SwiftUI
-import WebKit
 import PDFKit
 
 // MARK: - Compile state
@@ -7,33 +6,19 @@ import PDFKit
 enum PaperCompileState: Equatable {
     case idle
     case compiling
-    case autoFixing    // Feynman is reading + rewriting the LaTeX
-    case recompiling   // Feynman finished; retrying the compile
-    case error(String) // auto-fix failed — show message, allow manual retry
+    case error(String) // real LaTeX compile error — never a silent fallback
 
-    var isIdle: Bool { self == .idle }
-
-    var isAutoFixing: Bool {
-        switch self {
-        case .autoFixing, .recompiling: return true
-        default: return false
-        }
+    var isIdle: Bool {
+        if case .idle = self { return true }
+        return false
     }
-
-    var overlayStage: String {
-        switch self {
-        case .autoFixing:   return "Feynman spotted a LaTeX error…"
-        case .recompiling:  return "Almost there — recompiling…"
-        default:            return ""
-        }
+    var isError: Bool {
+        if case .error = self { return true }
+        return false
     }
-
-    var overlaySubtitle: String {
-        switch self {
-        case .autoFixing:   return "Feynman is analyzing and fixing your document automatically."
-        case .recompiling:  return "Applying the fix and generating your PDF."
-        default:            return ""
-        }
+    var errorMessage: String? {
+        if case .error(let msg) = self { return msg }
+        return nil
     }
 }
 
@@ -48,7 +33,8 @@ struct PaperEditorView: View {
     @State private var content: String
     @State private var editedTitle: String
     @FocusState private var isEditorFocused: Bool
-    @State private var pdfURL: URL?
+    @State private var pdfURL: URL?          // temp-file URL — PDFKit memory-maps it
+    @State private var compilationError: String?
     @State private var compileState: PaperCompileState = .idle
     @State private var showSettingsSheet = false
     @State private var showAISheet = false
@@ -108,14 +94,7 @@ struct PaperEditorView: View {
         }
         .background(Color.opennoteCream)
 
-        // ── Auto-fix overlay (inside ZStack, floats above the VStack) ──
-        if compileState.isAutoFixing {
-            LaTeXAutoFixOverlay(state: compileState)
-                .transition(.opacity.animation(.easeInOut(duration: 0.35)))
-                .zIndex(99)
-        }
     } // end ZStack
-    .animation(.easeInOut(duration: 0.3), value: compileState.isAutoFixing)
     .background(Color.opennoteCream)
     .navigationBarBackButtonHidden(true)
     .toolbar {
@@ -224,19 +203,59 @@ struct PaperEditorView: View {
 
     private var pdfPreview: some View {
         ZStack {
-            if let url = pdfURL {
-                // HTML fallback uses WKWebView; real PDFs use native PDFKit
-                if url.pathExtension == "html" {
-                    PDFWebView(url: url)
-                } else {
-                    PDFKitView(url: url)
-                }
-            } else {
+            // ── State 1: Compiling ──
+            if compileState == .compiling {
                 VStack(spacing: 16) {
-                    Image(systemName: "doc.richtext")
+                    ProgressView()
+                        .scaleEffect(1.4)
+                        .tint(Color.opennoteGreen)
+                    Text("Compiling PDF…")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // ── State 2: Success — real PDFKit render (memory-mapped from temp file) ──
+            } else if let url = pdfURL {
+                PDFKitView(url: url)
+
+            // ── State 3: Failure — show error log, nothing else ──
+            } else if let log = compileState.errorMessage {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Label("Compilation Failed", systemImage: "xmark.octagon.fill")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(.red)
+                        Text(log)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(.primary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Button {
+                            Haptics.impact(.light)
+                            compileAndPreview()
+                        } label: {
+                            Label("Retry Compile", systemImage: "arrow.clockwise")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+                                .background(Color.opennoteGreen)
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.top, 4)
+                    }
+                    .padding(20)
+                }
+                .background(Color(.systemGroupedBackground))
+
+            // ── State 4: Idle, no compile yet ──
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "doc.text")
                         .font(.system(size: 48))
                         .foregroundStyle(Color(.systemGray3))
-                    Text("Tap the button below to compile your LaTeX to PDF")
+                    Text("Press Compile PDF to render your document")
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -244,194 +263,142 @@ struct PaperEditorView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            if case .error(let msg) = compileState {
-                VStack {
-                    Spacer()
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("Compilation failed", systemImage: "xmark.circle.fill")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.red)
-                        Text(msg)
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding()
-                    .background(Color.red.opacity(0.08))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .padding()
-                    Spacer()
-                }
-            }
         }
         .overlay(alignment: .top) {
-            Text("PDF Preview")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
-                .padding(8)
-                .frame(maxWidth: .infinity)
-                .background(Color(.systemGray6).opacity(0.5))
+            if compileState != .compiling {
+                Text("PDF Preview")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .padding(8)
+                    .frame(maxWidth: .infinity)
+                    .background(Color(.systemGray6).opacity(0.5))
+            }
         }
         .overlay(alignment: .bottomTrailing) {
-            Button {
-                Haptics.impact(.light)
-                compileAndPreview()
-            } label: {
-                HStack(spacing: 8) {
-                    if compileState == .compiling {
-                        ProgressView()
-                            .scaleEffect(0.9)
-                            .tint(.white)
-                    } else {
+            if !compileState.isError, compileState != .compiling {
+                Button {
+                    Haptics.impact(.light)
+                    compileAndPreview()
+                } label: {
+                    HStack(spacing: 8) {
                         Image(systemName: "doc.fill")
                             .font(.system(size: 18, weight: .medium))
+                        Text("Compile PDF")
+                            .font(.system(size: 15, weight: .semibold))
                     }
-                    Text(compileState == .compiling ? "Compiling…" : "Compile PDF")
-                        .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 14)
+                    .background(Color.opennoteGreen)
+                    .clipShape(Capsule())
+                    .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
                 }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
-                .background(Color.opennoteGreen)
-                .clipShape(Capsule())
-                .shadow(color: .black.opacity(0.12), radius: 8, x: 0, y: 4)
+                .buttonStyle(.plain)
+                .disabled(content.trimmingCharacters(in: .whitespaces).isEmpty)
+                .opacity(content.trimmingCharacters(in: .whitespaces).isEmpty ? 0.6 : 1)
+                .padding(20)
             }
-            .buttonStyle(.plain)
-            .disabled(!compileState.isIdle || content.trimmingCharacters(in: .whitespaces).isEmpty)
-            .opacity(content.trimmingCharacters(in: .whitespaces).isEmpty ? 0.6 : 1)
-            .padding(20)
         }
     }
 
     private func compileAndPreview() {
-        guard compileState.isIdle else { return }
+        guard compileState.isIdle || compileState.isError else { return }
         compileState = .compiling
+        pdfURL = nil
+        compilationError = nil
         let tex = Self.ensureValidLaTeX(content)
         Task {
-            // Initial attempt: external services only (no HTML fallback yet)
-            // so that actual LaTeX errors still trigger the LLM auto-fix.
-            let result = await Self.doCompileExternal(tex: tex)
+            let (url, errorLog) = await Self.compileToURL(tex: tex)
             await MainActor.run {
-                switch result {
-                case .success(let url):
+                compileState = .idle
+                if let url {
                     pdfURL = url
-                    compileState = .idle
-                case .failure(let compileErr):
-                    // External services failed → let Feynman diagnose and fix.
-                    // After Feynman's fix the FULL pipeline (incl. HTML fallback) runs,
-                    // so the user always ends up seeing something.
-                    compileState = .autoFixing
-                    Task { await autoFixAndRecompile(brokenTex: tex, errorLog: compileErr.localizedDescription) }
+                } else {
+                    compileState = .error(errorLog ?? "Compilation failed.")
                 }
-            }
-        }
-    }
-
-    @MainActor
-    private func autoFixAndRecompile(brokenTex: String, errorLog: String) async {
-        var fixedTeX = ""
-        do {
-            for try await chunk in OpenAIService.shared.fixLaTeXErrors(tex: brokenTex, errorLog: errorLog) {
-                fixedTeX += chunk
-            }
-        } catch {
-            // LLM unreachable — still show an HTML preview so nothing is ever blank
-            if let htmlURL = Self.renderLocalHTML(tex: brokenTex) {
-                pdfURL = htmlURL
-                compileState = .idle
-            } else {
-                compileState = .error("Could not reach Feynman AI. Tap Compile PDF to retry when online.")
-            }
-            return
-        }
-
-        guard !fixedTeX.isEmpty else {
-            // LLM returned nothing — still give the user an HTML preview
-            if let htmlURL = Self.renderLocalHTML(tex: brokenTex) {
-                pdfURL = htmlURL
-                compileState = .idle
-            } else {
-                compileState = .error("Feynman couldn't determine a fix. Please review your LaTeX manually.")
-            }
-            return
-        }
-
-        let sanitized = Self.ensureValidLaTeX(fixedTeX)
-        content = sanitized          // apply the fix so the user can see the corrected code
-        compileState = .recompiling
-
-        // Full pipeline for the retry — includes HTML fallback, so ALWAYS succeeds.
-        let result = await Self.doCompile(tex: sanitized)
-        switch result {
-        case .success(let url):
-            pdfURL = url
-            compileState = .idle
-        case .failure:
-            // This branch is unreachable in practice (doCompile has HTML fallback),
-            // but handle it gracefully just in case.
-            if let htmlURL = Self.renderLocalHTML(tex: sanitized) {
-                pdfURL = htmlURL
-                compileState = .idle
-            } else {
-                compileState = .error("Compilation failed. Please review your LaTeX.")
             }
         }
     }
 
     // MARK: - Compilation pipeline
 
-    /// External-only compile (no HTML fallback).
-    /// Used for the initial attempt so LaTeX errors still trigger the LLM fix.
-    private static func doCompileExternal(tex: String) async -> Result<URL, NSError> {
+    /// Two-tier pipeline: latexonline.cc → texlive.net.
+    /// Returns real PDF bytes on success, or a filtered error log on failure.
+    /// Never falls back to any HTML/web renderer.
+    /// Compiles and immediately writes PDF bytes to a temp file, then releases the Data.
+    /// PDFKit uses URL-based loading to memory-map the file — far lower RAM than Data-based.
+    /// Returns (tempFileURL, nil) on success or (nil, errorLog) on failure.
+    private static func compileToURL(tex: String) async -> (URL?, String?) {
         let clean = ensureValidLaTeX(tex)
+        var lastError = "PDF compilation failed. Check your LaTeX source and try again."
 
-        // Tier 1: latexonline.cc (two attempts with a pause)
+        // Tier 1: latexonline.cc (two attempts with a 1-second pause)
         for attempt in 1...2 {
             let r = await doCompileLatexOnline(tex: clean)
-            if case .success = r { return r }
-            if attempt == 1 { try? await Task.sleep(nanoseconds: 1_500_000_000) }
+            switch r {
+            case .success(let data):
+                if let url = writePDFToDisk(data) { return (url, nil) }
+            case .failure(let err):
+                lastError = parseErrorLog(err.localizedDescription)
+            }
+            if attempt == 1 { try? await Task.sleep(nanoseconds: 1_000_000_000) }
         }
 
-        // Tier 2: texlive.net CGI
-        return await doCompileTexliveNet(tex: clean)
+        // Tier 2: texlive.net CGI (one attempt)
+        let r2 = await doCompileTexliveNet(tex: clean)
+        switch r2 {
+        case .success(let data):
+            if let url = writePDFToDisk(data) { return (url, nil) }
+        case .failure(let err):
+            lastError = parseErrorLog(err.localizedDescription)
+        }
+
+        return (nil, lastError)
     }
 
-    /// Full compile pipeline including HTML fallback.
-    /// Used after the LLM fix — guaranteed to return .success.
-    private static func doCompile(tex: String) async -> Result<URL, NSError> {
-        let external = await doCompileExternal(tex: tex)
-        if case .success = external { return external }
-
-        // Tier 3: local HTML preview with MathJax — no network needed, always works
-        if let htmlURL = renderLocalHTML(tex: tex) { return .success(htmlURL) }
-
-        return .failure(NSError(domain: "PaperEditor", code: -999,
-            userInfo: [NSLocalizedDescriptionKey: "All compilation methods failed."]))
+    /// Writes PDF bytes to a uniquely-named temp file and immediately releases the Data.
+    /// The returned URL is memory-mappable by PDFDocument(url:).
+    private static func writePDFToDisk(_ data: Data) -> URL? {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".pdf")
+        do {
+            try data.write(to: url, options: .atomic)
+            return url
+        } catch {
+            return nil
+        }
     }
 
-    /// Compile via latexonline.cc — simple form-encoded POST as documented.
-    /// POST https://latexonline.cc/compile  (Content-Type: application/x-www-form-urlencoded)
-    /// Body: text=<url-percent-encoded LaTeX source>
-    private static func doCompileLatexOnline(tex: String) async -> Result<URL, NSError> {
+    /// Compile via latexonline.cc — form-encoded POST.
+    /// POST https://latexonline.cc/compile  Content-Type: application/x-www-form-urlencoded
+    private static func doCompileLatexOnline(tex: String) async -> Result<Data, NSError> {
         func err(_ msg: String, code: Int = -1) -> NSError {
             NSError(domain: "PaperEditor", code: code, userInfo: [NSLocalizedDescriptionKey: msg])
         }
         guard let url = URL(string: "https://latexonline.cc/compile") else {
             return .failure(err("Invalid latexonline.cc URL."))
         }
-        guard let encoded = tex.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+        // urlQueryAllowed leaves & and = unencoded — they are form-field delimiters
+        // and MUST be percent-encoded when they appear inside a form value.
+        // LaTeX uses & for table columns and align environments.
+        var formValueCS = CharacterSet.urlQueryAllowed
+        formValueCS.remove(charactersIn: "&=+#")
+        guard let encoded = tex.addingPercentEncoding(withAllowedCharacters: formValueCS) else {
             return .failure(err("Could not percent-encode the LaTeX source."))
         }
-        var request = URLRequest(url: url, timeoutInterval: 30)
+        var request = URLRequest(url: url, timeoutInterval: 45)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         request.httpBody = "text=\(encoded)".data(using: .utf8)
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            if data.prefix(4) == Data("%PDF".utf8) { return .success(try savePDF(data)) }
-            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            let raw = String(data: data, encoding: .utf8) ?? "Compilation failed."
-            return .failure(err("[latexonline.cc] HTTP \(code): \(parseErrorLog(raw))", code: code))
+            guard data.prefix(4) == Data("%PDF".utf8) else {
+                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                let raw = String(data: data, encoding: .utf8) ?? "Compilation failed."
+                return .failure(err("[latexonline.cc] HTTP \(code): \(raw)", code: code))
+            }
+            return .success(data)
         } catch {
             return .failure(error as NSError)
         }
@@ -447,157 +414,65 @@ struct PaperEditorView: View {
         return important.isEmpty ? log : important.prefix(15).joined(separator: "\n")
     }
 
-    /// Fallback 1: compile via texlive.net CGI (David Carlisle's latexcgi).
-    /// Uses the actual CGI endpoint and the array field names it expects.
-    private static func doCompileTexliveNet(tex: String) async -> Result<URL, NSError> {
+    /// Fallback: compile via texlive.net CGI (David Carlisle's latexcgi).
+    /// Field layout per the API spec:
+    ///   filecontents[] — raw LaTeX source (no filename= in Content-Disposition)
+    ///   filename[]     — must be literally "document.tex" (the server's main-file identifier)
+    ///   engine         — "pdflatex"
+    ///   return         — "pdf"
+    private static func doCompileTexliveNet(tex: String) async -> Result<Data, NSError> {
         func err(_ msg: String, code: Int = -1) -> NSError {
             NSError(domain: "PaperEditor", code: code, userInfo: [NSLocalizedDescriptionKey: msg])
         }
-        // The web page at /run is just a UI shell; the real CGI is at /cgi-bin/latexcgi
         guard let url = URL(string: "https://texlive.net/cgi-bin/latexcgi") else {
             return .failure(err("Invalid texlive.net URL."))
         }
-        let boundary = "OpenNoteLatex\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
+        let boundary = "Boundary-\(UUID().uuidString)"
         var body = Data()
 
-        func field(_ name: String, filename: String? = nil, value: String) {
-            var disp = "Content-Disposition: form-data; name=\"\(name)\""
-            if let fn = filename { disp += "; filename=\"\(fn)\"" }
-            body += "--\(boundary)\r\n\(disp)\r\n".data(using: .utf8)!
-            if filename != nil { body += "Content-Type: text/plain; charset=utf-8\r\n".data(using: .utf8)! }
-            body += "\r\n".data(using: .utf8)!
-            body += (value + "\r\n").data(using: .utf8)!
+        func append(_ string: String) {
+            if let d = string.data(using: .utf8) { body.append(d) }
         }
 
-        // latexcgi uses array-syntax field names: filecontents[] and filename[]
-        field("filecontents[]", filename: "main.tex", value: tex)
-        field("filename[]", value: "main.tex")
-        field("engine", value: "pdflatex")
-        field("return", value: "pdf")
-        body += "--\(boundary)--\r\n".data(using: .utf8)!
+        // Field 1: filecontents[] — raw LaTeX source, NO filename= attribute
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"filecontents[]\"\r\n\r\n")
+        append("\(tex)\r\n")
 
-        var request = URLRequest(url: url, timeoutInterval: 30)
+        // Field 2: filename[] — MUST be "document.tex" so the server knows the entry point
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"filename[]\"\r\n\r\n")
+        append("document.tex\r\n")
+
+        // Field 3: engine
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"engine\"\r\n\r\n")
+        append("pdflatex\r\n")
+
+        // Field 4: return type
+        append("--\(boundary)\r\n")
+        append("Content-Disposition: form-data; name=\"return\"\r\n\r\n")
+        append("pdf\r\n")
+
+        append("--\(boundary)--\r\n")
+
+        var request = URLRequest(url: url, timeoutInterval: 45)
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.httpBody = body
 
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
-            if data.prefix(4) == Data("%PDF".utf8) { return .success(try savePDF(data)) }
-            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-            let raw = String(data: data, encoding: .utf8) ?? ""
-            let msg = raw.hasPrefix("<!") ? "texlive.net returned an HTML page (service may be down)" : parseErrorLog(raw)
-            return .failure(err("[texlive.net] HTTP \(code): \(msg)", code: code))
+            guard data.prefix(4) == Data("%PDF".utf8) else {
+                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                let raw = String(data: data, encoding: .utf8) ?? ""
+                let msg = raw.hasPrefix("<!") ? "texlive.net returned an HTML page — service may be down." : raw
+                return .failure(err("[texlive.net] HTTP \(code): \(msg)", code: code))
+            }
+            return .success(data)
         } catch {
             return .failure(error as NSError)
         }
-    }
-
-    /// Fallback 2 (always succeeds): render the LaTeX body locally as HTML + MathJax.
-    /// The WKWebView displays HTML files perfectly; the user sees a preview with a banner.
-    private static func renderLocalHTML(tex: String) -> URL? {
-        // Extract body between \begin{document} and \end{document}
-        var body: String
-        if let s = tex.range(of: "\\begin{document}"),
-           let e = tex.range(of: "\\end{document}") {
-            body = String(tex[s.upperBound..<e.lowerBound])
-        } else {
-            body = tex
-        }
-
-        // Strip LaTeX comments
-        body = (try? body.replacingOccurrences(of: "%[^\n]*", with: "", options: .regularExpression)) ?? body
-
-        // Commands to drop
-        for cmd in ["\\maketitle", "\\tableofcontents", "\\listoffigures",
-                    "\\listoftables", "\\noindent", "\\centering", "\\sloppy", "\\par"] {
-            body = body.replacingOccurrences(of: cmd, with: "")
-        }
-        body = body.replacingOccurrences(of: "\\newpage", with: "<hr>")
-        body = body.replacingOccurrences(of: "\\clearpage", with: "<hr>")
-
-        // Sections
-        body = (try? body.replacingOccurrences(of: "\\\\section\\*?\\{([^}]+)\\}", with: "\n<h1>$1</h1>\n", options: .regularExpression)) ?? body
-        body = (try? body.replacingOccurrences(of: "\\\\subsection\\*?\\{([^}]+)\\}", with: "\n<h2>$1</h2>\n", options: .regularExpression)) ?? body
-        body = (try? body.replacingOccurrences(of: "\\\\subsubsection\\*?\\{([^}]+)\\}", with: "\n<h3>$1</h3>\n", options: .regularExpression)) ?? body
-
-        // Text formatting
-        body = (try? body.replacingOccurrences(of: "\\\\textbf\\{([^}]+)\\}", with: "<strong>$1</strong>", options: .regularExpression)) ?? body
-        body = (try? body.replacingOccurrences(of: "\\\\textit\\{([^}]+)\\}", with: "<em>$1</em>", options: .regularExpression)) ?? body
-        body = (try? body.replacingOccurrences(of: "\\\\emph\\{([^}]+)\\}", with: "<em>$1</em>", options: .regularExpression)) ?? body
-        body = (try? body.replacingOccurrences(of: "\\\\underline\\{([^}]+)\\}", with: "<u>$1</u>", options: .regularExpression)) ?? body
-        body = (try? body.replacingOccurrences(of: "\\\\texttt\\{([^}]+)\\}", with: "<code>$1</code>", options: .regularExpression)) ?? body
-
-        // Lists
-        body = body.replacingOccurrences(of: "\\begin{itemize}", with: "<ul>")
-        body = body.replacingOccurrences(of: "\\end{itemize}", with: "</ul>")
-        body = body.replacingOccurrences(of: "\\begin{enumerate}", with: "<ol>")
-        body = body.replacingOccurrences(of: "\\end{enumerate}", with: "</ol>")
-        body = (try? body.replacingOccurrences(of: "\\\\item\\b", with: "<li>", options: .regularExpression)) ?? body
-
-        // Display math environments → $$...$$ for MathJax
-        body = (try? body.replacingOccurrences(of: "\\\\begin\\{equation\\*?\\}([\\s\\S]*?)\\\\end\\{equation\\*?\\}", with: "$$\n$1\n$$", options: .regularExpression)) ?? body
-        body = (try? body.replacingOccurrences(of: "\\\\begin\\{align\\*?\\}([\\s\\S]*?)\\\\end\\{align\\*?\\}", with: "$$\n\\\\begin{align}$1\\\\end{align}\n$$", options: .regularExpression)) ?? body
-        body = (try? body.replacingOccurrences(of: "\\\\\\[([\\s\\S]*?)\\\\\\]", with: "$$\n$1\n$$", options: .regularExpression)) ?? body
-
-        // Line breaks and paragraphs
-        body = (try? body.replacingOccurrences(of: "\\\\\\\\", with: "<br>", options: .regularExpression)) ?? body
-        body = body.replacingOccurrences(of: "\n\n", with: "</p><p>")
-
-        let html = """
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <script>
-            window.MathJax = {
-                tex: { inlineMath:[['$','$']], displayMath:[['$$','$$']], processEscapes:true },
-                options: { skipHtmlTags:['script','noscript','style','textarea','pre'] }
-            };
-            </script>
-            <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
-            <style>
-                body { font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;
-                       font-size:16px; line-height:1.65; margin:0; padding:20px 24px;
-                       color:#1a1a1a; background:#fff; }
-                h1 { font-size:22px; font-weight:700; margin:24px 0 10px; }
-                h2 { font-size:18px; font-weight:600; margin:20px 0 8px; }
-                h3 { font-size:15px; font-weight:600; margin:16px 0 6px; }
-                ul,ol { margin:8px 0; padding-left:24px; }
-                li { margin:4px 0; }
-                code { font-family:'Courier New',monospace; font-size:13px;
-                       background:#f0f0f0; padding:1px 4px; border-radius:3px; }
-                pre { background:#f5f5f5; padding:12px; border-radius:6px; overflow-x:auto; }
-                hr { border:none; border-top:1px solid #ddd; margin:20px 0; }
-                table { border-collapse:collapse; width:100%; margin:12px 0; }
-                th,td { border:1px solid #ccc; padding:6px 10px; text-align:left; }
-                th { background:#f5f5f5; font-weight:600; }
-                .banner { background:#fff3e0; border-left:4px solid #ff9800;
-                          padding:10px 14px; margin-bottom:20px; font-size:13px;
-                          color:#5d4037; border-radius:0 6px 6px 0; }
-            </style>
-        </head>
-        <body>
-            <div class="banner">
-                ⚡ <strong>Preview mode</strong> — PDF compilation services were unreachable.
-                Math renders via MathJax. Tap <em>Compile PDF</em> again when online to get a true PDF.
-            </div>
-            <p>\(body)</p>
-        </body>
-        </html>
-        """
-        let temp = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString + ".html")
-        try? html.write(to: temp, atomically: true, encoding: .utf8)
-        return temp
-    }
-
-    private static func savePDF(_ data: Data) throws -> URL {
-        let temp = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString + ".pdf")
-        try data.write(to: temp)
-        return temp
     }
 
     // MARK: - Package sanitizer
@@ -775,7 +650,9 @@ private extension CGFloat {
     }
 }
 
-/// Native PDFKit viewer — used for real PDF files returned by compilation services.
+/// Native PDFKit viewer — loads from a temp-file URL so PDFKit can memory-map the PDF.
+/// Memory-mapped loading uses only the RAM needed for visible pages (~1-2 MB)
+/// instead of loading the entire file into RAM like PDFDocument(data:) does.
 private struct PDFKitView: UIViewRepresentable {
     let url: URL
 
@@ -784,30 +661,25 @@ private struct PDFKitView: UIViewRepresentable {
         pdfView.autoScales = true
         pdfView.displayMode = .singlePageContinuous
         pdfView.displayDirection = .vertical
-        pdfView.backgroundColor = UIColor(named: "opennoteCream") ?? .systemBackground
-        if let doc = PDFDocument(url: url) { pdfView.document = doc }
+        pdfView.usePageViewController(true)
+        pdfView.backgroundColor = UIColor(named: "opennoteCream") ?? UIColor.systemGroupedBackground
+        if let doc = PDFDocument(url: url) {
+            pdfView.document = doc
+            pdfView.goToFirstPage(nil)
+        }
         return pdfView
     }
 
     func updateUIView(_ pdfView: PDFView, context: Context) {
-        if let doc = PDFDocument(url: url), doc.documentURL != pdfView.document?.documentURL {
+        // Only reload when the file URL has actually changed — this is critical.
+        // Without this guard, every SwiftUI re-render (typing in the editor,
+        // state changes, etc.) would allocate a new PDFDocument, causing rapid
+        // memory churn that crashes the app.
+        guard pdfView.document?.documentURL != url else { return }
+        if let doc = PDFDocument(url: url) {
             pdfView.document = doc
+            pdfView.goToFirstPage(nil)
         }
-    }
-}
-
-/// WKWebView renderer — used only for the local HTML preview fallback.
-private struct PDFWebView: UIViewRepresentable {
-    let url: URL
-
-    func makeUIView(context: Context) -> WKWebView {
-        let view = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
-        view.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
-        return view
-    }
-
-    func updateUIView(_ webView: WKWebView, context: Context) {
-        webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
     }
 }
 
@@ -1012,108 +884,6 @@ private struct PaperAISheet: View {
             } else {
                 errorMessage = "Feynman couldn't complete the edit. Please try again."
             }
-        }
-    }
-}
-
-// MARK: - Auto-fix overlay
-
-private struct LaTeXAutoFixOverlay: View {
-    let state: PaperCompileState
-
-    @State private var logoRotation: Double = -8
-    @State private var logoOffset: CGFloat = 0
-    @State private var dot1Opacity: Double = 0.2
-    @State private var dot2Opacity: Double = 0.2
-    @State private var dot3Opacity: Double = 0.2
-    @State private var haloScale: CGFloat = 0.95
-    @State private var haloOpacity: Double = 0.4
-
-    var body: some View {
-        ZStack {
-            // Blurred background
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .ignoresSafeArea()
-
-            // Ambient green halo
-            Circle()
-                .fill(Color.opennoteGreen.opacity(0.18))
-                .frame(width: 280, height: 280)
-                .scaleEffect(haloScale)
-                .opacity(haloOpacity)
-                .blur(radius: 30)
-
-            VStack(spacing: 28) {
-                // Animated Feynman logo
-                ZStack {
-                    Circle()
-                        .fill(Color.opennoteGreen.opacity(0.12))
-                        .frame(width: 110, height: 110)
-                        .scaleEffect(haloScale)
-                    Image("logo")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 64, height: 64)
-                        .rotationEffect(.degrees(logoRotation))
-                        .offset(y: logoOffset)
-                }
-
-                // Stage text
-                VStack(spacing: 8) {
-                    Text(state.overlayStage)
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                        .foregroundStyle(.primary)
-                        .multilineTextAlignment(.center)
-                        .id(state.overlayStage) // triggers transition
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
-
-                    Text(state.overlaySubtitle)
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 36)
-                        .id(state.overlaySubtitle)
-                        .transition(.opacity)
-                }
-                .animation(.easeInOut(duration: 0.5), value: state.overlayStage)
-
-                // Animated dots
-                HStack(spacing: 8) {
-                    ForEach(Array([dot1Opacity, dot2Opacity, dot3Opacity].enumerated()), id: \.offset) { i, op in
-                        Circle()
-                            .fill(Color.opennoteGreen)
-                            .frame(width: 8, height: 8)
-                            .opacity(op)
-                    }
-                }
-            }
-            .padding(40)
-        }
-        .onAppear { startAnimations() }
-    }
-
-    private func startAnimations() {
-        // Logo sway
-        withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) {
-            logoRotation = 8
-            logoOffset = -6
-        }
-        // Halo pulse
-        withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
-            haloScale = 1.1
-            haloOpacity = 0.7
-        }
-        // Dots cascade
-        let base = 0.5
-        withAnimation(.easeInOut(duration: base).repeatForever(autoreverses: true).delay(0.0)) {
-            dot1Opacity = 1.0
-        }
-        withAnimation(.easeInOut(duration: base).repeatForever(autoreverses: true).delay(0.2)) {
-            dot2Opacity = 1.0
-        }
-        withAnimation(.easeInOut(duration: base).repeatForever(autoreverses: true).delay(0.4)) {
-            dot3Opacity = 1.0
         }
     }
 }

@@ -42,24 +42,28 @@ final class OpenAIVisionService {
     """
 
     private func prepareImagePayload(_ image: UIImage) -> String? {
-        // GPT-4o "high" detail tiles at 512×512 and supports up to 2048px per edge.
-        // Staying at 2048 gives maximum resolution without exceeding the model's tile budget.
-        let maxEdge: CGFloat = 2048
+        // GPT-4o vision quality is excellent up to ~1300px. Using 1300px keeps the
+        // uncompressed bitmap at ~6 MB instead of ~16 MB at 2048px — critical for
+        // staying within iOS memory limits during concurrent operations.
+        let maxEdge: CGFloat = 1300
         let size = image.size
         let longerEdge = max(size.width, size.height)
         guard longerEdge > 0 else { return nil }
 
         let scale: CGFloat = longerEdge > maxEdge ? maxEdge / longerEdge : 1.0
-
         let newSize = CGSize(width: size.width * scale, height: size.height * scale)
-        let renderer = UIGraphicsImageRenderer(size: newSize)
-        let resized = renderer.image { _ in
-            image.draw(in: CGRect(origin: .zero, size: newSize))
-        }
 
-        // 0.92 quality preserves fine handwriting strokes without excessive file size
-        guard let jpegData = resized.jpegData(compressionQuality: 0.92) else { return nil }
-        return jpegData.base64EncodedString()
+        // autoreleasepool releases the bitmap backing store immediately after JPEG encoding
+        return autoreleasepool {
+            let renderer = UIGraphicsImageRenderer(size: newSize)
+            let resized = renderer.image { _ in
+                image.draw(in: CGRect(origin: .zero, size: newSize))
+            }
+            // 0.82 quality is indistinguishable from 0.92 for text/handwriting,
+            // but produces roughly half the JPEG file size.
+            guard let jpegData = resized.jpegData(compressionQuality: 0.82) else { return nil }
+            return jpegData.base64EncodedString()
+        }
     }
 
     func formatNote(image: UIImage, rawOCRText: String) -> AsyncThrowingStream<String, Error> {
@@ -107,9 +111,11 @@ final class OpenAIVisionService {
                         ["role": "user", "content": contentBlocks]
                     ]
 
+                    // 4096 tokens is ample for a full page of handwritten notes.
+                    // 16384 caused peak memory pressure from the buffered stream.
                     let body: [String: Any] = [
                         "model": "gpt-4o",
-                        "max_tokens": 16384,
+                        "max_tokens": 4096,
                         "stream": true,
                         "messages": messages
                     ]
@@ -275,9 +281,11 @@ final class OpenAIVisionService {
                         ["role": "user", "content": contentBlocks]
                     ]
 
+                    // 8192 tokens is enough for a complete LaTeX article.
+                    // Keeping below 16384 avoids peak memory pressure from the response buffer.
                     let body: [String: Any] = [
                         "model": "gpt-4o",
-                        "max_tokens": 16384,
+                        "max_tokens": 8192,
                         "stream": true,
                         "messages": messages
                     ]

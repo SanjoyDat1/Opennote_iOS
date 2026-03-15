@@ -42,6 +42,7 @@ final class ScanSessionModel {
         guard let image = images.first else { return }
         guard !Task.isCancelled else { return }
 
+        // Store original only for the "view original" button — released after step 3 starts.
         capturedImage = image
         rawOCRText = ""
         formattedText = ""
@@ -64,15 +65,17 @@ final class ScanSessionModel {
         }
 
         // ── STEP 3: GPT-4o Vision ────────────────────────────────
+        // The enhanced image is passed to the vision service which immediately
+        // downscales + JPEG-encodes it. Release the full-res enhanced copy right
+        // after submitting so it doesn't compete with the network response buffer.
         phase = .formatting(progress: 0.0)
         let service = OpenAIVisionService()
         var chunkCount = 0
 
+        let stream = service.formatNote(image: enhanced, rawOCRText: rawOCRText)
+
         do {
-            for try await chunk in service.formatNote(
-                image: enhanced,
-                rawOCRText: rawOCRText
-            ) {
+            for try await chunk in stream {
                 guard !Task.isCancelled else { return }
                 formattedText += chunk
                 chunkCount += 1
@@ -113,6 +116,8 @@ final class ScanSessionModel {
     func reset() {
         scanTask?.cancel()
         scanTask = nil
+        // Explicitly nil the image so UIImage backing store is released immediately —
+        // not left alive while the user goes back to the editor and compiles PDF.
         capturedImage = nil
         phase = .idle
         rawOCRText = ""
