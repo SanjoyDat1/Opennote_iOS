@@ -347,12 +347,29 @@ struct PaperEditorView: View {
         }
     }
 
-    // MARK: - Shared compile helper
+    // MARK: - Compilation pipeline
 
+    /// Orchestrator: sanitise → latexonline.cc (×2) → texlive.net fallback.
     private static func doCompile(tex: String) async -> Result<URL, NSError> {
+        let clean = ensureValidLaTeX(tex) // strip bad packages + guarantee structure
+
+        // Primary service: latexonline.cc (two attempts before giving up)
+        for attempt in 1...2 {
+            let r = await doCompileLatexOnline(tex: clean)
+            if case .success = r { return r }
+            if attempt == 1 {
+                try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 s before retry
+            }
+        }
+
+        // Fallback service: texlive.net
+        return await doCompileTexliveNet(tex: clean)
+    }
+
+    /// Compile via latexonline.cc (tar.gz binary POST).
+    private static func doCompileLatexOnline(tex: String) async -> Result<URL, NSError> {
         func err(_ msg: String, code: Int = -1) -> NSError {
-            NSError(domain: "PaperEditor", code: code,
-                    userInfo: [NSLocalizedDescriptionKey: msg])
+            NSError(domain: "PaperEditor", code: code, userInfo: [NSLocalizedDescriptionKey: msg])
         }
         guard let tarData = buildTarGz(texContent: tex) else {
             return .failure(err("Could not package the LaTeX document."))
@@ -369,18 +386,131 @@ struct PaperEditorView: View {
             let (data, response) = try await URLSession.shared.data(for: request)
             let statusOK = (response as? HTTPURLResponse).map { (200..<300).contains($0.statusCode) } ?? false
             if statusOK, data.prefix(4) == Data("%PDF".utf8) {
-                let temp = FileManager.default.temporaryDirectory
-                    .appendingPathComponent(UUID().uuidString + ".pdf")
-                try? data.write(to: temp)
-                return .success(temp)
-            } else {
-                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-                let errText = String(data: data, encoding: .utf8) ?? "Compilation failed."
-                return .failure(err("HTTP \(code): \(errText)", code: code))
+                return .success(try savePDF(data))
             }
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let msg = String(data: data, encoding: .utf8) ?? "Compilation failed."
+            return .failure(err("[latexonline.cc] HTTP \(code): \(msg)", code: code))
         } catch {
             return .failure(error as NSError)
         }
+    }
+
+    /// Fallback: compile via texlive.net (multipart/form-data POST).
+    private static func doCompileTexliveNet(tex: String) async -> Result<URL, NSError> {
+        func err(_ msg: String, code: Int = -1) -> NSError {
+            NSError(domain: "PaperEditor", code: code, userInfo: [NSLocalizedDescriptionKey: msg])
+        }
+        guard let url = URL(string: "https://texlive.net/run?return=pdf&engine=pdflatex") else {
+            return .failure(err("Invalid texlive.net URL."))
+        }
+        let boundary = "OpenNoteLatexBoundary\(UUID().uuidString.replacingOccurrences(of: "-", with: ""))"
+        var body = Data()
+
+        func appendPart(name: String, filename: String? = nil, contentType: String? = nil, value: String) {
+            var disp = "Content-Disposition: form-data; name=\"\(name)\""
+            if let fn = filename { disp += "; filename=\"\(fn)\"" }
+            body += "--\(boundary)\r\n\(disp)\r\n".data(using: .utf8)!
+            if let ct = contentType { body += "Content-Type: \(ct)\r\n".data(using: .utf8)! }
+            body += "\r\n".data(using: .utf8)!
+            body += value.data(using: .utf8)!
+            body += "\r\n".data(using: .utf8)!
+        }
+
+        appendPart(name: "filecontents", filename: "document.tex",
+                   contentType: "text/plain; charset=utf-8", value: tex)
+        appendPart(name: "filename", value: "document.tex")
+        body += "--\(boundary)--\r\n".data(using: .utf8)!
+
+        var request = URLRequest(url: url, timeoutInterval: 120)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.httpBody = body
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let statusOK = (response as? HTTPURLResponse).map { (200..<300).contains($0.statusCode) } ?? false
+            if statusOK, data.prefix(4) == Data("%PDF".utf8) {
+                return .success(try savePDF(data))
+            }
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let msg = String(data: data, encoding: .utf8) ?? "Compilation failed."
+            return .failure(err("[texlive.net] HTTP \(code): \(msg)", code: code))
+        } catch {
+            return .failure(error as NSError)
+        }
+    }
+
+    private static func savePDF(_ data: Data) throws -> URL {
+        let temp = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + ".pdf")
+        try data.write(to: temp)
+        return temp
+    }
+
+    // MARK: - Package sanitizer
+
+    /// Packages known to be absent or unreliable on hosted pdflatex services.
+    /// Everything NOT on this list is stripped and replaced with safe shims.
+    private static let blockedPackages: [String] = [
+        "tcolorbox", "minted", "fontawesome", "fontawesome5",
+        "mdframed", "framed", "todonotes", "pdfpages",
+        "marginnote", "sidenotes", "textpos",
+        "newpxtext", "newpxmath",
+        "libertine", "libertinust1math",
+        "palatino", "mathpazo",
+        "helvet", "courier", "times", "mathptmx",
+        "luatexja", "xeCJK"
+    ]
+
+    /// Strips unsafe \\usepackage lines, patches environments, and injects
+    /// compatibility shims so the document compiles on any standard pdflatex host.
+    private static func stripUnsafePackages(_ text: String) -> String {
+        var t = text
+
+        // 1. Remove every \usepackage[...]{blockedPkg}
+        for pkg in blockedPackages {
+            let patterns = [
+                "\\\\usepackage\\[[^\\]]*\\]\\{\(pkg)\\}",
+                "\\\\usepackage\\{\(pkg)\\}"
+            ]
+            for p in patterns {
+                t = (try? t.replacingOccurrences(of: p, with: "", options: .regularExpression)) ?? t
+            }
+        }
+
+        // 2. Replace minted environments → lstlisting
+        if t.contains("minted") {
+            t = (try? t.replacingOccurrences(
+                of: "\\\\begin\\{minted\\}(?:\\[[^\\]]*\\])?\\{[^}]*\\}",
+                with: "\\\\begin{lstlisting}",
+                options: .regularExpression)) ?? t
+            t = t.replacingOccurrences(of: "\\end{minted}", with: "\\end{lstlisting}")
+            if !t.contains("\\usepackage{listings}") {
+                t = t.replacingOccurrences(of: "\\begin{document}",
+                                           with: "\\usepackage{listings}\n\\begin{document}")
+            }
+        }
+
+        // 3. Shim tcolorbox as a simple framed quote (preserves content)
+        if t.contains("tcolorbox") {
+            let shim = """
+            % --- tcolorbox shim (not available on this host) ---
+            \\makeatletter
+            \\@ifundefined{tcolorbox}{%
+              \\newenvironment{tcolorbox}[1][]{\\begin{quote}\\small}{\\end{quote}}%
+            }{}
+            \\makeatother
+            """
+            t = t.replacingOccurrences(of: "\\begin{document}",
+                                       with: "\(shim)\n\\begin{document}")
+        }
+
+        // 4. Strip any remaining \\usepackage{non-existent font} calls
+        let fontPackagePattern = "\\\\usepackage(?:\\[[^\\]]*\\])?\\{(?:newpx|libertine|palatino|helvet|courier|times|mathpt)[^}]*\\}"
+        t = (try? t.replacingOccurrences(of: fontPackagePattern, with: "", options: .regularExpression)) ?? t
+
+        return t
     }
 
     // MARK: - LaTeX pre-compile sanitizer
@@ -390,6 +520,9 @@ struct PaperEditorView: View {
     private static func ensureValidLaTeX(_ raw: String) -> String {
         var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return raw }
+
+        // Always strip unsafe packages first
+        text = stripUnsafePackages(text)
 
         // Strip opening code fence (```latex / ```tex / ```)
         for fence in ["```latex", "```tex", "```"] {

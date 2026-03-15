@@ -199,16 +199,21 @@ final class OpenAIVisionService {
                     • Fix obvious handwriting/OCR errors using context.
                     • If text is genuinely illegible, write % [illegible].
 
-                    ══ PACKAGE MANAGEMENT — CRITICAL ══
-                    • Before finalizing, audit EVERY command in your output.
-                    • Add \\usepackage{amsmath} for any math environment or AMS commands.
-                    • Add \\usepackage{amssymb} for \\mathbb, \\mathcal, \\mathfrak, etc.
-                    • Add \\usepackage{graphicx} if you include images.
-                    • Add \\usepackage{booktabs} for \\toprule/\\midrule/\\bottomrule.
-                    • Add \\usepackage{enumitem} for custom list options.
-                    • Add \\usepackage{xcolor} for \\textcolor or \\colorbox.
-                    • Add \\usepackage{tcolorbox} for tcolorbox environments.
-                    • Add \\usepackage{hyperref} for URLs or cross-references.
+                    ══ PACKAGE MANAGEMENT — STRICT SAFE LIST ══
+                    Only use packages from this approved list (they are guaranteed
+                    to be available on any standard pdflatex host):
+                      inputenc, fontenc, geometry, amsmath, amssymb, amsfonts,
+                      mathtools, graphicx, xcolor, hyperref, booktabs, array,
+                      longtable, multirow, tabularx, listings, fancyhdr, setspace,
+                      microtype, lmodern, caption, subcaption, float, wrapfig,
+                      parskip, enumitem, natbib, babel, url, calc, ifthen,
+                      tikz, pgf, siunitx, algorithm, algorithmicx, algpseudocode,
+                      multicol, rotating, soul, ulem, appendix, titlesec.
+                    • NEVER use: tcolorbox, minted, fontawesome, fontawesome5,
+                      mdframed, framed, todonotes, pdfpages, libertine, palatino,
+                      helvet, times, newpxtext, newpxmath, or any custom fonts.
+                    • Use \\begin{quote} instead of tcolorbox for callout boxes.
+                    • Use \\begin{lstlisting} instead of minted for code blocks.
                     • Only add packages that are actually needed.
                     • All \\usepackage{} lines go in the preamble, before \\begin{document}.
 
