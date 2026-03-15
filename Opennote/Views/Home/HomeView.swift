@@ -36,7 +36,7 @@ struct HomeView: View {
                     Image("logo")
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 24, height: 24)
+                        .frame(width: 48, height: 48)
                     Text("Home")
                         .opennoteMajorHeader()
                     Spacer()
@@ -334,6 +334,7 @@ struct PaperCard: View {
     var onFavorite: ((Paper) -> Void)?
     
     @State private var showRenameAlert = false
+    @State private var showDeleteAlert = false
     @State private var renameText = ""
     
     var body: some View {
@@ -360,8 +361,8 @@ struct PaperCard: View {
                                 Label(paper.isFavorite ? "Remove from Favorites" : "Add to Favorites", systemImage: paper.isFavorite ? "star.slash" : "star")
                             }
                         }
-                        if let onDelete {
-                            Button(role: .destructive) { onDelete() } label: {
+                        if onDelete != nil {
+                            Button(role: .destructive) { showDeleteAlert = true } label: {
                                 Label("Delete", systemImage: "trash")
                             }
                         }
@@ -400,8 +401,8 @@ struct PaperCard: View {
                     Label(paper.isFavorite ? "Remove from Favorites" : "Add to Favorites", systemImage: paper.isFavorite ? "star.slash" : "star")
                 }
             }
-            if let onDelete {
-                Button(role: .destructive) { onDelete() } label: {
+            if onDelete != nil {
+                Button(role: .destructive) { showDeleteAlert = true } label: {
                     Label("Delete", systemImage: "trash")
                 }
             }
@@ -417,6 +418,12 @@ struct PaperCard: View {
         } message: {
             Text("Enter a new title for this paper.")
         }
+        .alert("Delete \"\(paper.title)\"?", isPresented: $showDeleteAlert) {
+            Button("Delete", role: .destructive) { onDelete?() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This paper will be permanently deleted and cannot be recovered.")
+        }
     }
 }
 
@@ -428,6 +435,7 @@ struct PaperListRow: View {
     var onFavorite: ((Paper) -> Void)?
     
     @State private var showRenameAlert = false
+    @State private var showDeleteAlert = false
     @State private var renameText = ""
     
     var body: some View {
@@ -456,8 +464,8 @@ struct PaperListRow: View {
                             Label(paper.isFavorite ? "Remove from Favorites" : "Add to Favorites", systemImage: paper.isFavorite ? "star.slash" : "star")
                         }
                     }
-                    if let onDelete {
-                        Button(role: .destructive) { onDelete() } label: {
+                    if onDelete != nil {
+                        Button(role: .destructive) { showDeleteAlert = true } label: {
                             Label("Delete", systemImage: "trash")
                         }
                     }
@@ -487,8 +495,8 @@ struct PaperListRow: View {
                     Label(paper.isFavorite ? "Remove from Favorites" : "Add to Favorites", systemImage: paper.isFavorite ? "star.slash" : "star")
                 }
             }
-            if let onDelete {
-                Button(role: .destructive) { onDelete() } label: {
+            if onDelete != nil {
+                Button(role: .destructive) { showDeleteAlert = true } label: {
                     Label("Delete", systemImage: "trash")
                 }
             }
@@ -504,6 +512,12 @@ struct PaperListRow: View {
         } message: {
             Text("Enter a new title.")
         }
+        .alert("Delete \"\(paper.title)\"?", isPresented: $showDeleteAlert) {
+            Button("Delete", role: .destructive) { onDelete?() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This paper will be permanently deleted and cannot be recovered.")
+        }
     }
 }
 
@@ -515,6 +529,7 @@ struct JournalCard: View {
     var onFavorite: ((Journal) -> Void)?
     
     @State private var showRenameAlert = false
+    @State private var showDeleteAlert = false
     @State private var renameText = ""
     
     var body: some View {
@@ -546,8 +561,8 @@ struct JournalCard: View {
                                 Label(journal.isFavorite ? "Remove from Favorites" : "Add to Favorites", systemImage: journal.isFavorite ? "star.slash" : "star")
                             }
                         }
-                        if let onDelete {
-                            Button(role: .destructive) { onDelete() } label: {
+                        if onDelete != nil {
+                            Button(role: .destructive) { showDeleteAlert = true } label: {
                                 Label("Delete", systemImage: "trash")
                             }
                         }
@@ -586,8 +601,8 @@ struct JournalCard: View {
                     Label(journal.isFavorite ? "Remove from Favorites" : "Add to Favorites", systemImage: journal.isFavorite ? "star.slash" : "star")
                 }
             }
-            if let onDelete {
-                Button(role: .destructive) { onDelete() } label: {
+            if onDelete != nil {
+                Button(role: .destructive) { showDeleteAlert = true } label: {
                     Label("Delete", systemImage: "trash")
                 }
             }
@@ -603,6 +618,12 @@ struct JournalCard: View {
         } message: {
             Text("Enter a new title for this journal.")
         }
+        .alert("Delete \"\(journal.title)\"?", isPresented: $showDeleteAlert) {
+            Button("Delete", role: .destructive) { onDelete?() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This journal and all its notes will be permanently deleted and cannot be recovered.")
+        }
     }
 }
 
@@ -614,6 +635,7 @@ struct JournalListRow: View {
     var onFavorite: ((Journal) -> Void)?
     
     @State private var showRenameAlert = false
+    @State private var showDeleteAlert = false
     @State private var renameText = ""
     
     var body: some View {
@@ -642,8 +664,8 @@ struct JournalListRow: View {
                             Label(journal.isFavorite ? "Remove from Favorites" : "Add to Favorites", systemImage: journal.isFavorite ? "star.slash" : "star")
                         }
                     }
-                    if let onDelete {
-                        Button(role: .destructive) { onDelete() } label: {
+                    if onDelete != nil {
+                        Button(role: .destructive) { showDeleteAlert = true } label: {
                             Label("Delete", systemImage: "trash")
                         }
                     }
@@ -673,8 +695,8 @@ struct JournalListRow: View {
                     Label(journal.isFavorite ? "Remove from Favorites" : "Add to Favorites", systemImage: journal.isFavorite ? "star.slash" : "star")
                 }
             }
-            if let onDelete {
-                Button(role: .destructive) { onDelete() } label: {
+            if onDelete != nil {
+                Button(role: .destructive) { showDeleteAlert = true } label: {
                     Label("Delete", systemImage: "trash")
                 }
             }
@@ -690,6 +712,12 @@ struct JournalListRow: View {
         } message: {
             Text("Enter a new title.")
         }
+        .alert("Delete \"\(journal.title)\"?", isPresented: $showDeleteAlert) {
+            Button("Delete", role: .destructive) { onDelete?() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This journal and all its notes will be permanently deleted and cannot be recovered.")
+        }
     }
 }
 
@@ -702,6 +730,7 @@ struct PaperCompactCard: View {
     var onRename: ((Paper) -> Void)?
 
     @State private var showRenameAlert = false
+    @State private var showDeleteAlert = false
     @State private var renameText = ""
 
     var body: some View {
@@ -712,10 +741,10 @@ struct PaperCompactCard: View {
                         .font(.system(size: 15, weight: .light))
                         .foregroundStyle(Color(.systemGray3))
                     Spacer()
-                    if let onDelete {
+                    if onDelete != nil {
                         Button {
                             Haptics.impact(.light)
-                            onDelete()
+                            showDeleteAlert = true
                         } label: {
                             Image(systemName: "trash.fill")
                                 .font(.system(size: 11, weight: .medium))
@@ -752,8 +781,8 @@ struct PaperCompactCard: View {
             if onRename != nil {
                 Button("Rename") { renameText = paper.title; showRenameAlert = true }
             }
-            if let onDelete {
-                Button(role: .destructive) { onDelete() } label: {
+            if onDelete != nil {
+                Button(role: .destructive) { showDeleteAlert = true } label: {
                     Label("Delete", systemImage: "trash")
                 }
             }
@@ -766,6 +795,12 @@ struct PaperCompactCard: View {
                 updated.title = renameText.isEmpty ? "Untitled Paper" : renameText
                 onRename?(updated)
             }
+        }
+        .alert("Delete \"\(paper.title)\"?", isPresented: $showDeleteAlert) {
+            Button("Delete", role: .destructive) { onDelete?() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This paper will be permanently deleted and cannot be recovered.")
         }
     }
 }
@@ -780,6 +815,7 @@ struct JournalLargeCard: View {
     var onFavorite: ((Journal) -> Void)?
 
     @State private var showRenameAlert = false
+    @State private var showDeleteAlert = false
     @State private var renameText = ""
 
     var body: some View {
@@ -815,8 +851,8 @@ struct JournalLargeCard: View {
                                 )
                             }
                         }
-                        if let onDelete {
-                            Button(role: .destructive) { onDelete() } label: {
+                        if onDelete != nil {
+                            Button(role: .destructive) { showDeleteAlert = true } label: {
                                 Label("Delete", systemImage: "trash")
                             }
                         }
@@ -868,8 +904,8 @@ struct JournalLargeCard: View {
                     )
                 }
             }
-            if let onDelete {
-                Button(role: .destructive) { onDelete() } label: {
+            if onDelete != nil {
+                Button(role: .destructive) { showDeleteAlert = true } label: {
                     Label("Delete", systemImage: "trash")
                 }
             }
@@ -882,6 +918,12 @@ struct JournalLargeCard: View {
                 updated.title = renameText.isEmpty ? "Untitled Journal" : renameText
                 onRename?(updated)
             }
+        }
+        .alert("Delete \"\(journal.title)\"?", isPresented: $showDeleteAlert) {
+            Button("Delete", role: .destructive) { onDelete?() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This journal and all its notes will be permanently deleted and cannot be recovered.")
         }
     }
 }
